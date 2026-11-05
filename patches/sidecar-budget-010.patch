@@ -47,6 +47,80 @@ index a41846c..a2a95c2 100644
    // min unstake delay
    // default: 1
    minUnstakeDelay: number;
+diff --git a/packages/executor/src/services/MempoolService/reputation.ts b/packages/executor/src/services/MempoolService/reputation.ts
+index 2034063..9994ea1 100644
+--- a/packages/executor/src/services/MempoolService/reputation.ts
++++ b/packages/executor/src/services/MempoolService/reputation.ts
+@@ -221,6 +221,25 @@ export class MempoolReputationChecks {
+     }
+   }
+ 
++  /**
++   * ERC-8421 REPUTATION-040: an unchanged entity gets no new `seen`. If the
++   * replacement changes the payer or factory, the old address loses 1 and the
++   * new one gains 1. The sender can't change: it is part of the slot's identity.
++   */
++  async updateSeenOnReplacement(
++    replaced: MempoolEntry,
++    entry: MempoolEntry
++  ): Promise<void> {
++    for (const role of ["payer", "factory"] as const) {
++      const before = replaced[role];
++      const after = entry[role];
++      if (before === after) continue;
++      if (before && after && getAddress(before) === getAddress(after)) continue;
++      if (before) await this.reputationService.removeSeenStatus(before);
++      if (after) await this.reputationService.updateSeenStatus(after);
++    }
++  }
++
+   /**
+    * Bumps `included` for every distinct entity address this entry names,
+    * once each - unlike `updateSeenStatus`, unconditionally (no fresh stake
+diff --git a/packages/executor/src/services/MempoolService/service.ts b/packages/executor/src/services/MempoolService/service.ts
+index c1141cd..f6a9752 100644
+--- a/packages/executor/src/services/MempoolService/service.ts
++++ b/packages/executor/src/services/MempoolService/service.ts
+@@ -306,9 +306,16 @@ export class MempoolService {
+         this.logger.debug("Mempool: Frame transaction added");
+       }
+       if (senderInfo || factoryInfo || payerInfo) {
+-        // `senderInfo` alone may be undefined (Self Relay) - updateSeenStatus
+-        // itself tolerates that; see its own comment.
+-        await this.reputationCheck.updateSeenStatus(entry, senderInfo);
++        // ERC-8421 REPUTATION-040: admitting a replacement is not a new
++        // occurrence of `seen`. Only an entry still holding its slot counts as
++        // replaced: resubmitting after Cancelled or Reverted is a new admission.
++        if (existingEntry && existingEntry.status < MempoolEntryStatus.OnChain) {
++          await this.reputationCheck.updateSeenOnReplacement(existingEntry, entry);
++        } else {
++          // `senderInfo` alone may be undefined (Self Relay) - updateSeenStatus
++          // itself tolerates that; see its own comment.
++          await this.reputationCheck.updateSeenStatus(entry, senderInfo);
++        }
+       }
+       this.eventBus.emit(ExecutorEvent.pendingUserOps, entry);
+     });
+diff --git a/packages/executor/src/services/ReputationService.ts b/packages/executor/src/services/ReputationService.ts
+index 70d26e3..eaed988 100644
+--- a/packages/executor/src/services/ReputationService.ts
++++ b/packages/executor/src/services/ReputationService.ts
+@@ -66,6 +66,15 @@ export class ReputationService {
+     });
+   }
+ 
++  /** Undoes one `seen`, for a replacement that moved a role to another address. */
++  async removeSeenStatus(address: string): Promise<void> {
++    await this.mutex.runExclusive(async () => {
++      const entry = await this.fetchOne(address);
++      if (entry.opsSeen > 0) entry.addToReputation(-1, 0);
++      await this.save(entry);
++    });
++  }
++
+   async updateIncludedStatus(address: string): Promise<void> {
+     await this.mutex.runExclusive(async () => {
+       const entry = await this.fetchOne(address);
 diff --git a/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts b/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts
 index 8a34f88..46a0079 100644
 --- a/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts
@@ -183,6 +257,147 @@ index ce5ef15..a903681 100644
    /**
     * Builds the `{sender?, payer, factory?}`-shaped stake-info map by
     * looking up each validation-prefix role's resolved address against
+diff --git a/packages/executor/test/services/MempoolService/replacementSeen.test.ts b/packages/executor/test/services/MempoolService/replacementSeen.test.ts
+new file mode 100644
+index 0000000..4e9eee9
+--- /dev/null
++++ b/packages/executor/test/services/MempoolService/replacementSeen.test.ts
+@@ -0,0 +1,135 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
++import { MempoolService } from "../../../src/services/MempoolService/service.js";
++import { MempoolReputationChecks } from "../../../src/services/MempoolService/reputation.js";
++import { ExecutorEventBus } from "../../../src/services/SubscriptionService.js";
++import { FrameTransaction, FRAME_MODE, APPROVE_SCOPE } from "@skandha/types/lib/contracts/FrameTx.js";
++import { MempoolEntryStatus, ReputationStatus } from "@skandha/types/lib/executor";
++
++// ERC-8421 REPUTATION-040: "Admitting a replacement is not a new occurrence of `seen`".
++
++const SENDER = "0x1111111111111111111111111111111111111111" as const;
++const PAYER_A = "0x2222222222222222222222222222222222222222" as const;
++const PAYER_B = "0x3333333333333333333333333333333333333333" as const;
++
++function memoryDb() {
++  const m = new Map<string, any>();
++  return {
++    get: async (k: string) => {
++      if (!m.has(k)) throw new Error("Not Found");
++      return m.get(k);
++    },
++    put: async (k: string, v: any) => void m.set(k, v),
++    del: async (k: string) => void m.delete(k),
++    getMany: async (ks: string[]) => ks.map((k) => m.get(k)).filter(Boolean),
++  } as any;
++}
++
++const tx = (maxFee: bigint, nonceKey = 7n): FrameTransaction => ({
++  chainId: 1n,
++  nonceKeys: [nonceKey],
++  nonceSeq: 0n,
++  sender: SENDER,
++  frames: [{ mode: FRAME_MODE.VERIFY, flags: APPROVE_SCOPE.EXECUTION_AND_PAYMENT, target: null, limits: { execution: 1n, state: 0n }, value: 0n, data: "0x" }],
++  signatures: [],
++  fees: { maxPriorityFeePerGas: maxFee, maxFeePerGas: maxFee, maxFeePerBlobGas: 0n },
++  blobVersionedHashes: [],
++  recentRootReferences: [],
++});
++
++const payerInfo = { addr: SENDER, stake: 0n, unstakeDelaySec: 0, withdrawTime: 0n } as any;
++
++function build() {
++  const reputation = {
++    updateSeenStatus: vi.fn().mockResolvedValue(undefined),
++    removeSeenStatus: vi.fn().mockResolvedValue(undefined),
++    updateIncludedStatus: vi.fn().mockResolvedValue(undefined),
++    getStatus: vi.fn().mockResolvedValue(ReputationStatus.OK),
++    fetchOne: vi.fn().mockResolvedValue({ opsSeen: 0, opsIncluded: 0 }),
++    calculateMaxAllowedMempoolOpsUnstaked: vi.fn().mockReturnValue(100),
++    checkStake: vi.fn().mockResolvedValue({ code: 0, msg: "" }),
++  };
++  const pool = new MempoolService(
++    memoryDb(),
++    1,
++    reputation as any,
++    new ExecutorEventBus(),
++    { useropsTTL: 0, archiveDuration: 1, whitelistedEntities: { payer: [], account: [], factory: [], paymaster: [], external: [] }, minStake: 0n, minUnstakeDelay: 0 } as any,
++    { debug: vi.fn(), error: vi.fn() } as any
++  );
++  const add = (t: FrameTransaction, hash: `0x${string}`) => pool.addFrameTx(t, hash, undefined, undefined, undefined, payerInfo);
++  return { pool, reputation, add };
++}
++
++describe("REPUTATION-040: replacements and seen", () => {
++  beforeEach(() => {
++    vi.useFakeTimers();
++    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
++  });
++  afterEach(() => vi.useRealTimers());
++
++  it("counts a new admission once", async () => {
++    const { add, reputation } = build();
++    await add(tx(2n), "0xaaa");
++    expect(reputation.updateSeenStatus).toHaveBeenCalledTimes(1);
++  });
++
++  it("does not count fee-bump replacements", async () => {
++    const { add, reputation } = build();
++    await add(tx(2n), "0xaaa");
++    let fee = 2n;
++    for (let i = 0; i < 8; i++) {
++      vi.advanceTimersByTime(10);
++      fee *= 2n;
++      await add(tx(fee), `0xb${i}`);
++    }
++    expect(reputation.updateSeenStatus).toHaveBeenCalledTimes(1);
++    expect(reputation.removeSeenStatus).not.toHaveBeenCalled();
++  });
++
++  it("counts different nonce keys separately: they are not replacements", async () => {
++    const { add, reputation } = build();
++    await add(tx(2n, 1n), "0xaaa");
++    await add(tx(2n, 2n), "0xbbb");
++    expect(reputation.updateSeenStatus).toHaveBeenCalledTimes(2);
++  });
++
++  it("counts a resubmission after the old entry was cancelled as a new admission", async () => {
++    const { pool, add, reputation } = build();
++    await add(tx(2n), "0xaaa");
++    const [entry] = await pool.fetchPendingUserOps();
++    await pool.updateStatus([entry], MempoolEntryStatus.Cancelled, { revertReason: "evicted" });
++    vi.advanceTimersByTime(10);
++    await add(tx(100n), "0xbbb");
++    expect(reputation.updateSeenStatus).toHaveBeenCalledTimes(2);
++  });
++});
++
++describe("updateSeenOnReplacement", () => {
++  const reputation = () => ({ updateSeenStatus: vi.fn().mockResolvedValue(undefined), removeSeenStatus: vi.fn().mockResolvedValue(undefined) });
++  const checks = (r: any) => new MempoolReputationChecks({} as any, r, {} as any);
++
++  it("does nothing when no role changed, ignoring address case", async () => {
++    const r = reputation();
++    await checks(r).updateSeenOnReplacement({ payer: PAYER_A } as any, { payer: PAYER_A.toUpperCase().replace("0X", "0x") } as any);
++    expect(r.updateSeenStatus).not.toHaveBeenCalled();
++    expect(r.removeSeenStatus).not.toHaveBeenCalled();
++  });
++
++  it("moves seen when the payer changes", async () => {
++    const r = reputation();
++    await checks(r).updateSeenOnReplacement({ payer: PAYER_A } as any, { payer: PAYER_B } as any);
++    expect(r.removeSeenStatus).toHaveBeenCalledWith(PAYER_A);
++    expect(r.updateSeenStatus).toHaveBeenCalledWith(PAYER_B);
++  });
++
++  it("moves seen when a factory is added or removed", async () => {
++    const added = reputation();
++    await checks(added).updateSeenOnReplacement({ payer: PAYER_A } as any, { payer: PAYER_A, factory: PAYER_B } as any);
++    expect(added.updateSeenStatus).toHaveBeenCalledWith(PAYER_B);
++    expect(added.removeSeenStatus).not.toHaveBeenCalled();
++    const removed = reputation();
++    await checks(removed).updateSeenOnReplacement({ payer: PAYER_A, factory: PAYER_B } as any, { payer: PAYER_A } as any);
++    expect(removed.removeSeenStatus).toHaveBeenCalledWith(PAYER_B);
++    expect(removed.updateSeenStatus).not.toHaveBeenCalled();
++  });
++});
 diff --git a/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts b/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts
 index d186c59..8c365c4 100644
 --- a/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts
