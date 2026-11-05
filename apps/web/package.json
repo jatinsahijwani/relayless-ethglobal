@@ -1,0 +1,31 @@
+{
+  "name": "@relayless/web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "circuits": "mkdir -p public/circuits && cp ../../packages/circuits/build/withdraw_js/withdraw.wasm ../../packages/circuits/build/withdraw.zkey ../../packages/circuits/build/ragequit_js/ragequit.wasm ../../packages/circuits/build/ragequit.zkey public/circuits/",
+    "dev": "pnpm circuits && vite",
+    "build": "pnpm circuits && vite build"
+  },
+  "dependencies": {
+    "@relayless/sdk": "workspace:*",
+    "@fontsource-variable/bricolage-grotesque": "^5.1.0",
+    "@fontsource/atkinson-hyperlegible": "^5.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "snarkjs": "0.7.6",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.8"
+  }
+}

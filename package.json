@@ -1,0 +1,26 @@
+{
+  "name": "relayless",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Withdraw privately to a wallet with zero ETH. No relayer.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build:circuits": "pnpm --filter @relayless/circuits build",
+    "test:circuits": "pnpm --filter @relayless/circuits test",
+    "build:contracts": "pnpm --filter @relayless/contracts build",
+    "test:contracts": "pnpm --filter @relayless/contracts test",
+    "test:sdk": "pnpm --filter @relayless/sdk test",
+    "deploy": "tsx scripts/deploy.ts",
+    "e2e": "tsx scripts/e2e.ts",
+    "web": "pnpm --filter @relayless/web dev"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "viem": "^2.57.7",
+    "@relayless/sdk": "workspace:*",
+    "@forshtat/hegota-support": "0.0.1"
+  }
+}

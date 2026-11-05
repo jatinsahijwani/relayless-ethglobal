@@ -1,0 +1,13 @@
+{
+  "name": "@relayless/circuits",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "test": "node --test --test-timeout=300000 test/*.test.mjs"
+  },
+  "dependencies": { "circomlib": "2.0.5" },
+  "devDependencies": { "snarkjs": "0.7.6", "poseidon-lite": "0.3.0", "@zk-kit/lean-imt": "2.2.5" }
+}

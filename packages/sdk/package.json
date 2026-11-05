@@ -1,0 +1,18 @@
+{
+  "name": "@relayless/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" },
+  "scripts": { "test": "node --import tsx --test --test-timeout=120000 test/*.test.ts" },
+  "dependencies": {
+    "@forshtat/hegota-support": "0.0.1",
+    "@noble/hashes": "^1.5.0",
+    "poseidon-lite": "0.3.0",
+    "snarkjs": "0.7.6",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": { "tsx": "^4.19.0", "typescript": "^5.6.0", "@types/node": "^22.0.0" }
+}
