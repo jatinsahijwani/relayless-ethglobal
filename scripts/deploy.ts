@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { encodeDeployData, parseEther, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { rpc } from "../packages/sdk/src/chain.js";
+import { nonceSettled, rpc } from "../packages/sdk/src/chain.js";
 
 const network = process.argv[2] ?? "local";
 const cfg = JSON.parse(readFileSync(`config/${network}.json`, "utf8"));
@@ -12,7 +12,7 @@ if (!key) throw new Error("set DEPLOYER_KEY");
 const account = privateKeyToAccount(key);
 const art = (p: string) => JSON.parse(readFileSync(`packages/contracts/out/${p}`, "utf8"));
 
-async function send(to: Address | null, data: Hex, value = 0n, gas = 45_000_000n) {
+async function send(to: Address | null, data: Hex, value = 0n, gas = 30_000_000n) {
   const nonce = Number(await rpc(cfg.rpc, "eth_getTransactionCount", [account.address, "pending"]));
   const block = await rpc(cfg.rpc, "eth_getBlockByNumber", ["latest", false]);
   const raw = await account.signTransaction({ chainId: cfg.chainId, nonce, to, value, data, gas, gasPrice: BigInt(block.baseFeePerGas) * 3n + 1000n, type: "legacy" });
@@ -21,6 +21,7 @@ async function send(to: Address | null, data: Hex, value = 0n, gas = 45_000_000n
     const r = await rpc(cfg.rpc, "eth_getTransactionReceipt", [hash]);
     if (r) {
       if (r.status !== "0x1") throw new Error(`reverted: ${hash}`);
+      await nonceSettled(cfg.rpc, hash);
       return r;
     }
     await new Promise((res) => setTimeout(res, 1000));

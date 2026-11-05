@@ -1,7 +1,7 @@
 import { serializeTypedData, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { BrowserStore, Relayless, httpAssociationSet, type Prover, type Signer } from "@relayless/sdk";
-import { rpc } from "@relayless/sdk/chain";
+import { nonceSettled, rpc } from "@relayless/sdk/chain";
 import { cfg } from "./config";
 
 const worker = new Worker(new URL("./prover.worker.ts", import.meta.url), { type: "module" });
@@ -78,7 +78,10 @@ export const askFaucet = (a: Address) => rpc(cfg.mempool, "skandha_explorer_fauc
 export async function waitMined(hash: Hex) {
   for (let i = 0; i < 90; i++) {
     const r = await rpc(cfg.rpc, "eth_getTransactionReceipt", [hash]);
-    if (r) return r;
+    if (r) {
+      await nonceSettled(cfg.rpc, hash);
+      return r;
+    }
     await new Promise((res) => setTimeout(res, 1000));
   }
   throw new Error("Not mined after 90 seconds. Check Activity before trying again.");

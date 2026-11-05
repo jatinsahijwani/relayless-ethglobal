@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Relayless, fileProver, type Signer } from "@relayless/sdk";
-import { rpc } from "../packages/sdk/src/chain.js";
+import { nonceSettled, rpc } from "../packages/sdk/src/chain.js";
 
 export const loadConfig = (network = process.env.RELAYLESS_NETWORK ?? "local") => JSON.parse(readFileSync(`config/${network}.deployed.json`, "utf8"));
 export const CIRCUITS = "packages/circuits/build";
@@ -33,6 +33,7 @@ export async function mined(cfg: any, hash: Hex) {
     const r = await rpc(cfg.rpc, "eth_getTransactionReceipt", [hash]);
     if (r) {
       if (r.status !== "0x1") throw new Error(`reverted: ${hash}`);
+      await nonceSettled(cfg.rpc, hash);
       return r;
     }
     await new Promise((res) => setTimeout(res, 1000));

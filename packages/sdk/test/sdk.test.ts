@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { anonymity, planPayment, depositSecrets, changeSecrets, masterFromSignature, nonceSlot, MemoryStore, siblings, rootOf, TREE_DEPTH, type Note } from "../src/index.js";
+import { encodeAbiParameters, encodeEventTopics } from "viem";
+import { POOL_ABI, fetchPoolState, anonymity, planPayment, depositSecrets, changeSecrets, masterFromSignature, nonceSlot, MemoryStore, siblings, rootOf, TREE_DEPTH, type Note } from "../src/index.js";
 import type { PoolState, DepositEvent } from "../src/chain.js";
 
 const A = "0x00000000000000000000000000000000000000a1" as const;
@@ -98,4 +99,65 @@ test("pay: skips spent notes, pending notes and notes failing the k-gate", () =>
   assert.deepEqual(planPayment(notes, 3n, 0n, 3, (n) => n.leafIndex === 1).map((p) => p.note.leafIndex), [2]);
   assert.throws(() => planPayment(notes, 3n, 2n, 3, () => false).length && planPayment(notes, 20n, 0n, 3, () => false), /not enough available balance/);
   assert.deepEqual(planPayment(notes, 3n, 2n, 3, () => false).map((p) => p.note.leafIndex), [1]);
+});
+
+// A fake node for fetchPoolState: serves logs, and errors for any range touching `holes`, as ethrex does.
+function fakeNode(logsByBlock: Record<number, any[]>, holes: number[], head: number) {
+  const original = globalThis.fetch;
+  const calls: [number, number][] = [];
+  globalThis.fetch = (async (_: string, init: any) => {
+    const { method, params } = JSON.parse(init.body);
+    const reply = (body: object) => ({ json: async () => ({ jsonrpc: "2.0", id: 1, ...body }) });
+    if (method === "eth_blockNumber") return reply({ result: `0x${head.toString(16)}` });
+    const lo = Number(params[0].fromBlock);
+    const hi = Number(params[0].toBlock);
+    calls.push([lo, hi]);
+    const hole = holes.find((h) => h >= lo && h <= hi);
+    if (hole !== undefined) return reply({ error: { code: -32603, message: `Internal Error: Could not get header for block ${hole}` } });
+    const result = Object.entries(logsByBlock).filter(([b]) => Number(b) >= lo && Number(b) <= hi).flatMap(([, l]) => l);
+    return reply({ result });
+  }) as any;
+  return { calls, restore: () => void (globalThis.fetch = original) };
+}
+
+const leafLog = (index: bigint, commitment: bigint, block: number) => ({
+  data: encodeAbiParameters([{ type: "uint256" }], [commitment]),
+  topics: encodeEventTopics({ abi: POOL_ABI, eventName: "LeafInserted", args: { leafIndex: index } }),
+  blockNumber: `0x${block.toString(16)}`,
+  transactionHash: "0x01",
+});
+
+test("fetchPoolState: reads around blocks the node can't serve", async () => {
+  const node = fakeNode({ 10: [leafLog(0n, 111n, 10)], 90: [leafLog(1n, 222n, 90)] }, [49, 50, 51], 100);
+  try {
+    const s = await fetchPoolState("http://node", A);
+    assert.deepEqual(s.leaves, [111n, 222n]);
+    assert.ok(node.calls.length > 1);
+  } finally {
+    node.restore();
+  }
+});
+
+test("fetchPoolState: fails loudly when a gap hid one of the pool's leaves", async () => {
+  // Leaf 1 is in a block the node can't serve, so leaf 2 leaves a gap behind it.
+  const node = fakeNode({ 10: [leafLog(0n, 111n, 10)], 50: [leafLog(1n, 222n, 50)], 90: [leafLog(2n, 333n, 90)] }, [50], 100);
+  try {
+    await assert.rejects(fetchPoolState("http://node", A), /missing pool data \(leaf 1\)/);
+  } finally {
+    node.restore();
+  }
+});
+
+test("fetchPoolState: other node errors are not swallowed", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_: string, init: any) => {
+    const { method } = JSON.parse(init.body);
+    const body = method === "eth_blockNumber" ? { result: "0x10" } : { error: { code: -32000, message: "rate limited" } };
+    return { json: async () => ({ jsonrpc: "2.0", id: 1, ...body }) };
+  }) as any;
+  try {
+    await assert.rejects(fetchPoolState("http://node", A), /rate limited/);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

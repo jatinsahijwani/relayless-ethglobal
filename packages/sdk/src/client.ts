@@ -108,6 +108,8 @@ const PRIORITY_FEE = 1_000_000n;
 const BUMP_PERCENT = 125n;
 /** Generous fees mean a bump should be rare; a bump costs the pool reputation, so it is not the first response. */
 const MIN_PENDING_BEFORE_BUMP_MS = 120_000;
+const PREFLIGHT_RETRIES = 5;
+const PREFLIGHT_RETRY_MS = 3_000;
 const ZERO: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /** Smallest covering note if there is one, otherwise largest notes first until the amount is met. */
@@ -426,8 +428,18 @@ export class Relayless {
 
   /** Simulates first: a transaction that would fail must never be broadcast. */
   private async preflight(tx: FrameTx): Promise<void> {
-    const sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
-    if (sim.executionError) throw new NotAdmittedError(`simulation failed, not broadcast: ${sim.executionError}`);
+    let sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
+    // ethrex treats this one as transient, and a young chain can show it after the head has moved on. Nothing has been
+    // broadcast, so waiting a few slots costs no reputation.
+    for (let i = 0; i < PREFLIGHT_RETRIES && /not yet referenceable/.test(sim.executionError ?? ""); i++) {
+      await new Promise((r) => setTimeout(r, PREFLIGHT_RETRY_MS));
+      sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
+    }
+    if (sim.executionError) {
+      const head = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
+      const refs = (tx as any).recentRootReferences?.map((r: RootRef) => r.slot).join(", ");
+      throw new NotAdmittedError(`simulation failed, not broadcast: ${sim.executionError} (head slot ${BigInt(head.slotNumber)}, root slots ${refs})`);
+    }
     // Frame 2 is only the refund: its failure costs nothing but the refund itself.
     const failed = (sim.frames ?? []).slice(0, 2).findIndex((f: any) => !f.succeeded);
     if (failed >= 0) throw new NotAdmittedError(`simulation failed at frame ${failed}, not broadcast`);

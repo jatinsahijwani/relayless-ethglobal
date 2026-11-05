@@ -36,6 +36,22 @@ export async function rpc<T = any>(url: string, method: string, params: unknown[
   return body.result as T;
 }
 
+/**
+ * Resolves once a mined transaction's nonce shows as used. Right after a receipt appears the node's nonce view can lag,
+ * so a next transaction signed at that moment could reuse the nonce and never mine.
+ */
+export async function nonceSettled(url: string, hash: Hex, timeoutMs = 30_000): Promise<void> {
+  const tx = await rpc(url, "eth_getTransactionByHash", [hash]);
+  if (!tx) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pending = BigInt(await rpc(url, "eth_getTransactionCount", [tx.from, "pending"]));
+    const latest = BigInt(await rpc(url, "eth_getTransactionCount", [tx.from, "latest"]));
+    if (latest > BigInt(tx.nonce) && pending > BigInt(tx.nonce)) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
 export interface DepositEvent { depositor: Address; label: bigint; value: bigint; precommitment: bigint; commitment: bigint; leafIndex: number; blockNumber: number; txHash: Hex }
 export interface WithdrawEvent { recipient: Address; amount: bigint; fee: bigint; changeCommitment: bigint; nullifierHash: bigint; k: bigint; blockNumber: number; txHash: Hex }
 export interface RagequitEvent { depositor: Address; label: bigint; value: bigint; fee: bigint; nullifierHash: bigint; blockNumber: number; txHash: Hex }
@@ -49,8 +65,26 @@ export interface PoolState {
   roots: RootEvent[];
 }
 
+/**
+ * Fetches logs, splitting the range around blocks the node can't serve. ethrex can lose the number index for a run of
+ * blocks, after which any range touching them errors. Skipped blocks are safe only because fetchPoolState checks the
+ * result: if a gap hid one of the pool's leaves, it fails rather than building a wrong tree.
+ */
+async function logsAround(rpcUrl: string, pool: Address, lo: number, hi: number): Promise<any[]> {
+  if (lo > hi) return [];
+  try {
+    return await rpc<any[]>(rpcUrl, "eth_getLogs", [{ address: pool, fromBlock: `0x${lo.toString(16)}`, toBlock: `0x${hi.toString(16)}` }]);
+  } catch (e) {
+    if (!(e instanceof RpcError) || !/could not get header/i.test(e.message)) throw e;
+    if (lo === hi) return [];
+    const mid = lo + Math.floor((hi - lo) / 2);
+    return [...(await logsAround(rpcUrl, pool, lo, mid)), ...(await logsAround(rpcUrl, pool, mid + 1, hi))];
+  }
+}
+
 export async function fetchPoolState(rpcUrl: string, pool: Address, fromBlock = 0): Promise<PoolState> {
-  const logs = await rpc<any[]>(rpcUrl, "eth_getLogs", [{ address: pool, fromBlock: `0x${fromBlock.toString(16)}`, toBlock: "latest" }]);
+  const head = Number(await rpc<string>(rpcUrl, "eth_blockNumber", []));
+  const logs = await logsAround(rpcUrl, pool, fromBlock, head);
   const state: PoolState = { leaves: [], deposits: [], withdrawals: [], ragequits: [], roots: [] };
   for (const log of logs) {
     let ev: any;
@@ -78,6 +112,12 @@ export async function fetchPoolState(rpcUrl: string, pool: Address, fromBlock = 
         state.ragequits.push({ depositor: a.depositor, label: a.label, value: a.value, fee: a.fee, nullifierHash: a.nullifierHash, ...at });
         break;
     }
+  }
+  // A missing index means the node couldn't serve a block holding one of the pool's leaves.
+  const expected = state.roots.reduce((m, r) => Math.max(m, r.leafCount), 0);
+  const count = Math.max(state.leaves.length, expected);
+  for (let i = 0; i < count; i++) {
+    if (state.leaves[i] === undefined) throw new Error(`this node is missing pool data (leaf ${i}), so your notes can't be rebuilt safely: try another node`);
   }
   return state;
 }

@@ -1,7 +1,7 @@
 import { concat, keccak256, numberToHex, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { fetchPoolState, rootOf } from "@relayless/sdk";
-import { rpc } from "@relayless/sdk/chain";
+import { nonceSettled, rpc } from "@relayless/sdk/chain";
 import type { Chain } from "./asp.js";
 
 export const ASP_SALT = keccak256(toHex("relayless.asp"));
@@ -25,6 +25,7 @@ export function liveChain(cfg: { rpc: string; pool: Address; chainId: number }, 
         if (!receipt) await new Promise((r) => setTimeout(r, 1000));
       }
       if (!receipt || receipt.status !== "0x1") throw new Error("publishing the approved set failed");
+      await nonceSettled(cfg.rpc, hash);
       const slot = BigInt((await rpc(cfg.rpc, "eth_getBlockByNumber", [receipt.blockNumber, false])).slotNumber);
       // A root can't be referenced in the slot it was written.
       for (let i = 0; i < 60; i++) {
