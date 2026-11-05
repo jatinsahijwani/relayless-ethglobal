@@ -1,0 +1,236 @@
+diff --git a/packages/executor/src/config.ts b/packages/executor/src/config.ts
+index 9eb284f..f1fdadf 100644
+--- a/packages/executor/src/config.ts
++++ b/packages/executor/src/config.ts
+@@ -231,6 +231,20 @@ export class Config {
+       ) as string
+     );
+ 
++    config.maxVerifyGasPerEntity = BigInt(
++      fromEnvVar(
++        "MAX_VERIFY_GAS_PER_ENTITY",
++        config.maxVerifyGasPerEntity ?? bundlerDefaultConfigs.maxVerifyGasPerEntity
++      ) as string
++    );
++
++    config.maxVerifyGasStakedEntity = BigInt(
++      fromEnvVar(
++        "MAX_VERIFY_GAS_STAKED_ENTITY",
++        config.maxVerifyGasStakedEntity ?? bundlerDefaultConfigs.maxVerifyGasStakedEntity
++      ) as string
++    );
++
+     config.minUnstakeDelay = Number(
+       fromEnvVar(
+         "MIN_UNSTAKE_DELAY",
+@@ -602,6 +616,8 @@ const bundlerDefaultConfigs: BundlerConfig = {
+   throttlingSlack: 10,
+   banSlack: 50,
+   minStake: parseEther("0.01"),
++  maxVerifyGasPerEntity: BigInt(100_000),
++  maxVerifyGasStakedEntity: BigInt(1_000_000),
+   minUnstakeDelay: 0,
+   stakingRegistryAddress: AddressZero,
+   minSignerBalance: parseEther("0.1"),
+diff --git a/packages/executor/src/interfaces.ts b/packages/executor/src/interfaces.ts
+index a41846c..a2a95c2 100644
+--- a/packages/executor/src/interfaces.ts
++++ b/packages/executor/src/interfaces.ts
+@@ -86,6 +86,10 @@ export interface NetworkConfig {
+   // minimum entity stake (in wei)
+   // default: 0.01 ether
+   minStake: bigint;
++  // ERC-8421 BUDGET-010 validation gas budgets, per entity
++  // default: 100000 unstaked, 1000000 staked
++  maxVerifyGasPerEntity: bigint;
++  maxVerifyGasStakedEntity: bigint;
+   // min unstake delay
+   // default: 1
+   minUnstakeDelay: number;
+diff --git a/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts b/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts
+index 8a34f88..46a0079 100644
+--- a/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts
++++ b/packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts
+@@ -218,6 +218,25 @@ export function recognizeValidationPrefix(
+ 
+ export type StructuralRulesResult = { valid: true } | { valid: false; reason: string };
+ 
++/**
++ * ERC-8421 BUDGET-010: validation gas per entity, as checksummed address to the
++ * sum of `limits.execution` over that entity's own validation frames. The
++ * signature cost and any frame without a role (a leading `expiry_verify`) count
++ * toward `tx.sender`.
++ */
++export function verifyGasByEntity(tx: FrameTransaction, prefix: ValidationPrefixMatch): Map<string, bigint> {
++  const sender = getAddress(tx.sender);
++  const gas = new Map<string, bigint>([[sender, signatureVerificationCost(tx)]]);
++  const lastPrefixIndex = Math.max(...prefix.frames.map((f) => f.frameIndex));
++  for (let i = 0; i <= lastPrefixIndex; i++) {
++    const frame = tx.frames[i];
++    const match = prefix.frames.find((f) => f.frameIndex === i);
++    const entity = match && match.role !== "sender" ? resolvedTarget(frame.target, tx.sender) : sender;
++    gas.set(entity, (gas.get(entity) ?? BigInt(0)) + frame.limits.execution);
++  }
++  return gas;
++}
++
+ /**
+  * Implements the remaining EIP-8141 §Structural Rules items not already
+  * enforced by `recognizeValidationPrefix`'s shape matching (items 1-4), plus
+@@ -247,7 +266,12 @@ export type StructuralRulesResult = { valid: true } | { valid: false; reason: st
+  * rejection condition on the transaction's validity — it doesn't reject
+  * anything, so it is intentionally not implemented here.
+  */
+-export function validateStructuralRules(tx: FrameTransaction, prefix: ValidationPrefixMatch): StructuralRulesResult {
++export function validateStructuralRules(
++  tx: FrameTransaction,
++  prefix: ValidationPrefixMatch,
++  /** `perEntityBudgets`: item 6's execution cap is enforced by the caller per entity (ERC-8421 BUDGET-010). */
++  options: { perEntityBudgets?: boolean } = {}
++): StructuralRulesResult {
+   const prefixFrameIndices = prefix.frames.map((f) => f.frameIndex);
+   const lastPrefixIndex = Math.max(...prefixFrameIndices);
+ 
+@@ -285,7 +309,7 @@ export function validateStructuralRules(tx: FrameTransaction, prefix: Validation
+   // per-scheme cost comes from.
+   const sigCost = signatureVerificationCost(tx);
+   const totalVerifyGas = executionSum + sigCost;
+-  if (totalVerifyGas > MAX_VERIFY_GAS) {
++  if (!options.perEntityBudgets && totalVerifyGas > MAX_VERIFY_GAS) {
+     return {
+       valid: false,
+       reason: `validation prefix execution gas sum ${executionSum} + signature-verification cost ${sigCost} = ${totalVerifyGas} exceeds MAX_VERIFY_GAS ${MAX_VERIFY_GAS}`,
+diff --git a/packages/executor/src/services/UserOpValidation/validators/frameTx.ts b/packages/executor/src/services/UserOpValidation/validators/frameTx.ts
+index ce5ef15..a903681 100644
+--- a/packages/executor/src/services/UserOpValidation/validators/frameTx.ts
++++ b/packages/executor/src/services/UserOpValidation/validators/frameTx.ts
+@@ -39,6 +39,7 @@ import { selectPrefixTrace } from "../erc7562TraceAdapter.js";
+ import {
+   recognizeValidationPrefix,
+   validateStructuralRules,
++  verifyGasByEntity,
+   ValidationPrefixMatch,
+ } from "../utils/validationPrefix.js";
+ import { NetworkConfig, StakeInfo } from "../../../interfaces.js";
+@@ -307,13 +308,20 @@ export class FrameTxValidationService {
+     }
+     collector.pass(EXPLORER_RULES.PREFIX);
+ 
+-    const structural = validateStructuralRules(tx, prefix);
++    const structural = validateStructuralRules(tx, prefix, { perEntityBudgets: true });
+     if (!structural.valid) {
+       throw collector.failed(
+         EXPLORER_RULES.STRUCTURE,
+         new RpcError(structural.reason, RpcErrorCodes.INVALID_USEROP)
+       );
+     }
++    const overBudget = await this.findEntityOverBudget(tx, prefix);
++    if (overBudget != null) {
++      throw collector.failed(
++        EXPLORER_RULES.STRUCTURE,
++        new RpcError(overBudget, RpcErrorCodes.INVALID_USEROP)
++      );
++    }
+     collector.pass(EXPLORER_RULES.STRUCTURE);
+ 
+     // The validation prefix's last real frame index (recognizeValidationPrefix
+@@ -378,9 +386,16 @@ export class FrameTxValidationService {
+     // specific, since it means tracing was never even attempted) and
+     // `executionError` (a revert during the traced execution pass itself).
+     if (simResult.erc7562Trace == null) {
++      // ethrex's canonical gas cap does not bind here (BUDGET-010 is checked per
++      // entity), so it must not mask the real reason the prefix failed.
++      const canonicalViolation = simResult.canonicalMempoolViolation?.startsWith(
++        "prefix gas budget exceeded"
++      )
++        ? null
++        : simResult.canonicalMempoolViolation;
+       const reason =
+-        (simResult.canonicalMempoolViolation != null
+-          ? describeEthrexViolation(simResult.canonicalMempoolViolation)
++        (canonicalViolation != null
++          ? describeEthrexViolation(canonicalViolation)
+           : null) ??
+         simResult.erc7562TraceError ??
+         simResult.executionError ??
+@@ -455,6 +470,29 @@ export class FrameTxValidationService {
+     };
+   }
+ 
++  /**
++   * ERC-8421 BUDGET-010: each entity gets its own validation gas budget, larger
++   * if it is staked. Returns the rejection reason, or null if all are within budget.
++   */
++  private async findEntityOverBudget(
++    tx: FrameTransaction,
++    prefix: ValidationPrefixMatch
++  ): Promise<string | null> {
++    const stakes = await this.resolveRoleStakes(tx, prefix);
++    const cache = new Map<string, { code: number; msg: string }>();
++    for (const [entity, gas] of verifyGasByEntity(tx, prefix)) {
++      const info = Object.values(stakes).find((s) => s.addr === entity);
++      const staked = info != null && (await this.checkStakeCached(info, cache)).code === 0;
++      const budget = staked
++        ? this.networkConfig.maxVerifyGasStakedEntity
++        : this.networkConfig.maxVerifyGasPerEntity;
++      if (gas > budget) {
++        return `${staked ? "staked" : "unstaked"} entity ${entity} validation gas ${gas} exceeds its budget ${budget} (BUDGET-010)`;
++      }
++    }
++    return null;
++  }
++
+   /**
+    * Builds the `{sender?, payer, factory?}`-shaped stake-info map by
+    * looking up each validation-prefix role's resolved address against
+diff --git a/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts b/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts
+index d186c59..8c365c4 100644
+--- a/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts
++++ b/packages/executor/test/services/UserOpValidation/utils/validationPrefix.test.ts
+@@ -1,8 +1,10 @@
+ import { describe, it, expect } from "vitest";
++import { getAddress } from "viem";
+ import {
+   recognizeValidationPrefix,
+   validateStructuralRules,
+   MAX_VERIFY_GAS,
++  verifyGasByEntity,
+   MAX_VERIFY_STATE_GAS,
+ } from "../../../../src/services/UserOpValidation/utils/validationPrefix.js";
+ import { FRAME_MODE, APPROVE_SCOPE, ATOMIC_BATCH_FLAG, Frame, FrameTransaction, SIG_SCHEME, SignatureEntry } from "@skandha/types/lib/contracts/FrameTx.js";
+@@ -408,3 +410,35 @@ describe("validateStructuralRules", () => {
+     }
+   });
+ });
++
++describe("verifyGasByEntity (ERC-8421 BUDGET-010)", () => {
++  const sender = "0x1111111111111111111111111111111111111111" as const;
++  const payer = "0x2222222222222222222222222222222222222222" as const;
++  const verify = (flags: number, target: `0x${string}` | null, execution: bigint): Frame => ({
++    mode: FRAME_MODE.VERIFY, flags, target, limits: { execution, state: 0n }, value: 0n, data: "0x",
++  });
++  const asTx = (frames: Frame[], signatures: FrameTransaction["signatures"] = []) =>
++    ({ sender, frames, signatures }) as unknown as FrameTransaction;
++
++  it("counts a self-relay's frames and signature cost toward the sender", () => {
++    const frames = [verify(3, null, 300_000n)];
++    const tx = asTx(frames, [{ scheme: 0, signer: "0x", msg: "0x", signature: "0x" }]);
++    const gas = verifyGasByEntity(tx, recognizeValidationPrefix(frames, sender)!);
++    expect(gas.get(getAddress(sender))).toBe(300_100n);
++    expect(gas.size).toBe(1);
++  });
++
++  it("keeps a separate budget for the sender and the payer", () => {
++    const frames = [verify(2, null, 80_000n), verify(1, payer, 90_000n)];
++    const gas = verifyGasByEntity(asTx(frames), recognizeValidationPrefix(frames, sender)!);
++    expect(gas.get(getAddress(sender))).toBe(80_000n);
++    expect(gas.get(getAddress(payer))).toBe(90_000n);
++  });
++
++  it("does not apply the single 100k cap when the caller enforces per-entity budgets", () => {
++    const frames = [verify(3, null, 300_000n)];
++    const prefix = recognizeValidationPrefix(frames, sender)!;
++    expect(validateStructuralRules(asTx(frames), prefix).valid).toBe(false);
++    expect(validateStructuralRules(asTx(frames), prefix, { perEntityBudgets: true }).valid).toBe(true);
++  });
++});
