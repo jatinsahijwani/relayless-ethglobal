@@ -1,5 +1,6 @@
 export * from "./client.js";
 export * from "./anonymity.js";
+export * from "./asp.js";
 export * from "./crypto.js";
 export * from "./store.js";
 export * from "./tree.js";

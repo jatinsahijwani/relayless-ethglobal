@@ -6,9 +6,11 @@ import { Deposit } from "./screens/Deposit";
 import { Meter, MeterPanel } from "./screens/Meter";
 import { Activity } from "./screens/Activity";
 import { Recover } from "./screens/Recover";
+import { Approve } from "./screens/Approve";
+import { cfg } from "./config";
 import { eth } from "./ui";
 
-const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover"] as const;
+const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved"] as const;
 export type Tab = (typeof TABS)[number];
 
 export interface Session {
@@ -48,7 +50,7 @@ export function App() {
         <span className="tnum text-slate">Private balance <strong className="text-ink">{eth(balance)} ETH</strong></span>
       </header>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 flex border-t-2 border-line bg-paper md:static md:mb-8 md:gap-1 md:border-none md:bg-transparent">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t !== "Get approved" || cfg.aspUrl).map((t) => (
           <button key={t} onClick={() => setTab(t)} aria-current={t === tab ? "page" : undefined} className={`min-h-14 flex-1 px-1 text-sm font-bold md:min-h-10 md:flex-none md:rounded-lg md:px-4 md:text-base ${t === tab ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>
             {t}
           </button>
@@ -61,6 +63,7 @@ export function App() {
           {tab === "Privacy" && <Meter s={session} />}
           {tab === "Activity" && <Activity s={session} />}
           {tab === "Recover" && <Recover s={session} />}
+          {tab === "Get approved" && <Approve s={session} />}
         </main>
         {tab !== "Privacy" && <aside className="hidden md:block"><MeterPanel s={session} /></aside>}
       </div>

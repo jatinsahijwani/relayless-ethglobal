@@ -17,6 +17,8 @@ import { TREE_DEPTH, rootOf, siblings } from "./tree.js";
 export interface Signer {
   address: Address;
   signTypedData(args: ReturnType<typeof seedTypedData>): Promise<Hex>;
+  /** Used to join an association set. */
+  signMessage?(message: string): Promise<Hex>;
   sendTransaction(args: { to: Address; value: bigint; data: Hex }): Promise<Hex>;
 }
 

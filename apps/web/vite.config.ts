@@ -20,6 +20,7 @@ export default defineConfig({
       mempool: isLocal ? "/mempool" : cfg.mempool,
       explorer: cfg.explorer ?? null,
       feeRange: cfg.feeRange ?? null,
+      aspUrl: cfg.aspUrl ? (isLocal ? "/asp" : cfg.aspUrl) : null,
     }),
   },
   server: {
@@ -30,6 +31,7 @@ export default defineConfig({
       ? {
           "/chain": { target: cfg.rpc, changeOrigin: true, rewrite: () => "/" },
           "/mempool": { target: cfg.mempool, changeOrigin: true, rewrite: () => "" },
+          ...(cfg.aspUrl ? { "/asp": { target: cfg.aspUrl, changeOrigin: true, rewrite: (p: string) => p.replace(/^\/asp/, "") } } : {}),
         }
       : undefined,
   },

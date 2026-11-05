@@ -1,6 +1,6 @@
 import { serializeTypedData, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { BrowserStore, Relayless, type Prover, type Signer } from "@relayless/sdk";
+import { BrowserStore, Relayless, httpAssociationSet, type Prover, type Signer } from "@relayless/sdk";
 import { rpc } from "@relayless/sdk/chain";
 import { cfg } from "./config";
 
@@ -39,6 +39,7 @@ export function testSigner(): Signer {
   return {
     address: account.address,
     signTypedData: (a) => account.signTypedData(a as any),
+    signMessage: (message) => account.signMessage({ message }),
     async sendTransaction({ to, value, data }) {
       const nonce = Number(await rpc(cfg.rpc, "eth_getTransactionCount", [account.address, "pending"]));
       const block = await rpc(cfg.rpc, "eth_getBlockByNumber", ["latest", false]);
@@ -62,12 +63,13 @@ export async function browserSigner(): Promise<Signer> {
   return {
     address,
     signTypedData: (a) => eth.request({ method: "eth_signTypedData_v4", params: [address, serializeTypedData(a as any)] }),
+    signMessage: (message) => eth.request({ method: "personal_sign", params: [message, address] }),
     sendTransaction: ({ to, value, data }) => eth.request({ method: "eth_sendTransaction", params: [{ from: address, to, value: `0x${value.toString(16)}`, data, gas: "0x4C4B40" }] }),
   };
 }
 
 export const connectPool = (signer: Signer) =>
-  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined });
+  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: cfg.aspUrl ? httpAssociationSet(cfg.aspUrl) : undefined });
 
 export const walletBalance = async (a: Address) => BigInt(await rpc(cfg.rpc, "eth_getBalance", [a, "latest"]));
 
