@@ -1,0 +1,19 @@
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource/atkinson-hyperlegible/400.css";
+@import "@fontsource/atkinson-hyperlegible/700.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { background: #E4EAE7; color: #16233A; font-family: "Atkinson Hyperlegible", system-ui, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: "Bricolage Grotesque Variable", system-ui, sans-serif; line-height: 1.08; letter-spacing: -0.02em; }
+:focus-visible { outline: 3px solid #0B6B70; outline-offset: 2px; }
+button:disabled { cursor: not-allowed; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+@keyframes gather { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+.dot { animation: gather 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-box: fill-box; transform-origin: center; }
+@keyframes arrive { 0% { background-color: #F0A202; } 100% { background-color: transparent; } }
+.arrived { animation: arrive 1400ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .dot, .arrived { animation: none; } }
