@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { AspError, createAsp, emptyState, type AspState } from "./asp.js";
 import { liveChain } from "./chain.js";
 import { directoryQueue, liveDirectory } from "./directory.js";
@@ -54,6 +55,7 @@ export function handler(asp: ReturnType<typeof createAsp>, allowedOrigin: string
       if (route === "GET /set") return send(200, await asp.set());
       if (route === "POST /rp-context") return send(200, asp.rpContext());
       if (route === "POST /join") return send(200, await asp.join(await readBody(req)));
+      if (route === "POST /allow") return send(200, await asp.allow(await readBody(req)));
       return send(404, { error: "not_found", message: "No such route." });
     } catch (e) {
       if (e instanceof AspError) return send(e.status, { error: e.code, message: e.message });
@@ -85,6 +87,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     environment,
     appId: WORLD_APP_ID ?? null,
     world,
+    allowlistOperator: process.env.ASP_ALLOWLIST === "1" ? privateKeyToAccount(process.env.ASP_KEY as Hex).address : undefined,
     chain: liveChain(cfg, process.env.ASP_KEY as Hex),
     state,
     save(s) {
@@ -92,6 +95,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       writeFileSync(statePath, JSON.stringify(s, null, 2));
     },
   });
+  // A restart must not leave an old root to expire: the timer below only fires 6 hours from now.
+  if (state.ref) asp.republish().catch((e) => console.error("republish failed", e));
   setInterval(() => asp.republish().catch((e) => console.error("republish failed", e)), REPUBLISH_MS);
   const port = Number(process.env.ASP_PORT ?? 8790);
   createServer(handler(asp, process.env.ASP_ALLOWED_ORIGIN)).listen(port, "127.0.0.1", () => console.log(`ASP on http://127.0.0.1:${port}, World ID ${world ? `on (${environment})` : "off: WORLD_* not set"}`));

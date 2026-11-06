@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import { privateKeyToAccount } from "viem/accounts";
 import { numberToHex, type Address } from "viem";
-import { AspError, createAsp, emptyState, joinMessage, type AspState } from "../src/asp.js";
+import { AspError, allowMessage, createAsp, emptyState, joinMessage, type AspState } from "../src/asp.js";
 import { realWorld } from "../src/world.js";
 import { directoryQueue } from "../src/directory.js";
 
@@ -219,4 +219,43 @@ test("directory queue: keeps working after a failure", async () => {
   q.publish(ref(2));
   await q.settled();
   assert.deepEqual(sent, [2n]);
+});
+
+function allowlistSetup(operator: Address | undefined) {
+  const published: bigint[][] = [];
+  const asp = createAsp({
+    pool: POOL,
+    action: "a",
+    environment: "production",
+    appId: null,
+    world: null,
+    allowlistOperator: operator,
+    chain: { deposits: async () => [{ depositor: alice.address, label: 11n }, { depositor: bob.address, label: 22n }, { depositor: stranger.address, label: 33n }], publish: async (labels) => (published.push(labels), { sourceId: "0x01", slot: 5n, root: "0x02" }) },
+    state: emptyState(),
+    save: () => {},
+  });
+  return { asp, published };
+}
+
+test("a World ID server has no allowlist path", async () => {
+  const { asp } = allowlistSetup(undefined);
+  const depositors = [alice.address];
+  await refused(asp.allow({ depositors, signature: await stranger.signMessage({ message: allowMessage(POOL, depositors) }) }), "not_found");
+  assert.equal("allowlist" in asp.config(), false);
+});
+
+test("only the operator can allow, and a batch publishes one root", async () => {
+  const { asp, published } = allowlistSetup(stranger.address);
+  const depositors = [alice.address, bob.address];
+  await refused(asp.allow({ depositors, signature: await alice.signMessage({ message: allowMessage(POOL, depositors) }) }), "bad_signature");
+  assert.equal(published.length, 0);
+  await asp.allow({ depositors, signature: await stranger.signMessage({ message: allowMessage(POOL, depositors) }) });
+  assert.deepEqual(published, [[11n, 22n]]);
+  assert.equal("allowlist" in asp.config(), true);
+});
+
+test("a signature for one list can't approve another", async () => {
+  const { asp } = allowlistSetup(stranger.address);
+  const signature = await stranger.signMessage({ message: allowMessage(POOL, [alice.address]) });
+  await refused(asp.allow({ depositors: [bob.address], signature }), "bad_signature");
 });

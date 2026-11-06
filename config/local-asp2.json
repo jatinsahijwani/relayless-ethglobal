@@ -6,5 +6,6 @@
   "stakingRegistry": "0xe8bdf6a3110973959f4b49d406f5d216ffa54b88",
   "stakeEth": "0.012",
   "reserveEth": "1",
-  "unstakeDelaySec": 86400
+  "unstakeDelaySec": 86400,
+  "aspUrl": "http://127.0.0.1:8791"
 }

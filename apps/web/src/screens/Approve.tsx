@@ -3,7 +3,7 @@ import type { Session } from "../App";
 import { Button, Problem, Screen, plainError } from "../ui";
 import { cfg } from "../config";
 
-interface AspConfig { enabled: boolean; app_id: `app_${string}` | null; action: string; environment: "production" | "staging" }
+interface AspConfig { allowlist?: boolean; enabled: boolean; app_id: `app_${string}` | null; action: string; environment: "production" | "staging" }
 
 /** Why a verification didn't complete, and what to do. Every path ends somewhere: nobody is stuck. */
 export function worldErrorMessage(code: string): string {
@@ -95,6 +95,8 @@ export function Approve({ s }: { s: Session }) {
 
       {approved ? (
         <p role="status" className="border-l-4 border-pool pl-3">You're approved. You can pay privately now.</p>
+      ) : config?.allowlist ? (
+        <p className="max-w-md border-l-4 border-line pl-3">On this pool the ASP's operator approves deposits directly. World ID isn't used here.</p>
       ) : config?.enabled ? (
         <Button disabled={busy} onClick={begin}>{busy ? "Opening…" : "Verify with World ID"}</Button>
       ) : (

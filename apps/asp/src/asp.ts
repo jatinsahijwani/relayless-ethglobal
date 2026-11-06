@@ -1,6 +1,9 @@
 // The association set: which deposits may withdraw privately. A verified unique human joins with one depositor address,
 // and every deposit from that address is approved. Anyone else keeps the public exit.
 //
+// An allowlist ASP is the other policy: its operator approves depositors directly, by signature, with no World ID. It is
+// only on when `allowlistOperator` is set, so a World ID server has no such path.
+//
 // World's verify API only confirms a proof is valid, so three checks live here:
 //  - the proof's signal must be this depositor, so a proof can't be lifted and reused for another address;
 //  - a nullifier joins once, so one human can't approve many addresses;
@@ -47,6 +50,8 @@ export interface AspOptions {
   save(state: AspState): void;
   /** Told about each root once the chain has it. Must return at once and never throw: see directory.ts. */
   directory?: { publish(ref: { root: Hex; slot: bigint }): void };
+  /** Turns on `allow`: this key may approve depositors directly. Leave unset on a World ID server. */
+  allowlistOperator?: Address;
 }
 
 export class AspError extends Error {
@@ -56,6 +61,7 @@ export class AspError extends Error {
 }
 
 export const joinMessage = (pool: Address, depositor: Address) => `Join the Relayless approved set for pool ${pool.toLowerCase()} as ${depositor.toLowerCase()}`;
+export const allowMessage = (pool: Address, depositors: Address[]) => `Allow on pool ${pool.toLowerCase()}: ${depositors.map((a) => a.toLowerCase()).join(",")}`;
 export const emptyState = (): AspState => ({ members: {}, ref: null, publishedLabels: [] });
 
 export function createAsp(o: AspOptions) {
@@ -85,7 +91,7 @@ export function createAsp(o: AspOptions) {
   }
 
   return {
-    config: () => ({ enabled: Boolean(o.world && o.appId), app_id: o.appId, action: o.action, environment: o.environment }),
+    config: () => ({ enabled: Boolean(o.world && o.appId), app_id: o.appId, action: o.action, environment: o.environment, ...(o.allowlistOperator ? { allowlist: true } : {}) }),
 
     rpContext() {
       if (!o.world) throw new AspError(503, "world_not_configured", "World ID isn't set up on this server yet.");
@@ -101,6 +107,21 @@ export function createAsp(o: AspOptions) {
 
     /** Anyone may ask: recent roots expire after 8191 slots, and the set must stay usable. */
     republish: () => serial(() => publishIfChanged(true)),
+
+    /** Allowlist policy only. Publishes one root however many depositors are added. */
+    allow: (body: { depositors?: string[]; signature?: Hex }) =>
+      serial(async () => {
+        if (!o.allowlistOperator) throw new AspError(404, "not_found", "No such route.");
+        const { depositors, signature } = body ?? {};
+        if (!Array.isArray(depositors) || depositors.length === 0 || !depositors.every((d) => isAddress(d)) || !signature) throw new AspError(400, "bad_request", "A list of depositors and the operator's signature are required.");
+        const addresses = depositors.map((d) => getAddress(d));
+        const signed = await verifyMessage({ address: o.allowlistOperator, message: allowMessage(o.pool, addresses), signature }).catch(() => false);
+        if (!signed) throw new AspError(401, "bad_signature", "That signature isn't from this ASP's operator.");
+        for (const a of addresses) o.state.members[`allowlist:${a}`] = a;
+        o.save(o.state);
+        await publishIfChanged();
+        return { approved: true, labels: o.state.publishedLabels.length };
+      }),
 
     join: (body: { depositor?: string; signature?: Hex; result?: any }) =>
       serial(async () => {

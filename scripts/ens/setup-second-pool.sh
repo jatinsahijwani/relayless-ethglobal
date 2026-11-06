@@ -14,7 +14,7 @@ cast send "$ASP" --value 1ether --private-key "$DEPLOYER_KEY" --rpc-url "$RPC" -
 node -e '
 const fs = require("fs");
 const c = JSON.parse(fs.readFileSync("config/local.json", "utf8"));
-fs.writeFileSync("config/local-asp2.json", JSON.stringify({ ...c, name: "local-asp2" }, null, 2) + "\n");
+fs.writeFileSync("config/local-asp2.json", JSON.stringify({ ...c, name: "local-asp2", aspUrl: "http://127.0.0.1:8791" }, null, 2) + "\n");
 '
 ASP_SOURCE_ID=$(cast keccak "$(cast concat-hex "$ASP" "$(cast keccak relayless.asp)")")
 export ASP_SOURCE_ID
