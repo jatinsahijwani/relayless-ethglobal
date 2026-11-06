@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" role="img" aria-label="A withdrawal is one frame transaction with three frames: VERIFY, SENDER and DEFAULT. The pool is both sender and payer." font-family="Helvetica, Arial, sans-serif">
+  <rect width="960" height="430" fill="#F6F8F6"/>
+  <text x="32" y="44" font-size="24" font-weight="700" fill="#16233A">One withdrawal: one EIP-8141 frame transaction</text>
+  <text x="32" y="72" font-size="15" fill="#56667A">sender = payer = the pool. Nonce key = the note's nullifier. The Groth16 proof sits in an ARBITRARY signature and commits to sigHash.</text>
+
+  <g>
+    <rect x="32" y="96" width="284" height="262" rx="10" fill="#FFFFFF" stroke="#0B6B70" stroke-width="2.5"/>
+    <rect x="32" y="96" width="284" height="44" rx="10" fill="#0B6B70"/>
+    <text x="48" y="125" font-size="17" font-weight="700" fill="#F6F8F6">Frame 0: VERIFY</text>
+    <text x="48" y="168" font-size="15" font-weight="700" fill="#16233A">Check the proof, approve payment</text>
+    <text x="48" y="196" font-size="14" fill="#16233A">Groth16 pairing via precompiles</text>
+    <text x="48" y="218" font-size="14" fill="#16233A">Pins the exact tx shape</text>
+    <text x="48" y="240" font-size="14" fill="#16233A">maxCost ≤ fee ≤ amount</text>
+    <text x="48" y="262" font-size="14" fill="#16233A">Reads no storage</text>
+    <text x="48" y="284" font-size="14" fill="#16233A">APPROVE consumes the nullifier</text>
+    <line x1="48" y1="302" x2="300" y2="302" stroke="#C9D3CF"/>
+    <text x="48" y="326" font-size="14" font-weight="700" fill="#0B6B70">About 253k gas used</text>
+    <text x="48" y="346" font-size="13" fill="#56667A">Limit 300k execution</text>
+  </g>
+
+  <path d="M316 226 h22" stroke="#16233A" stroke-width="2"/><path d="M338 226 l-8 -5 v10 z" fill="#16233A"/>
+
+  <g>
+    <rect x="338" y="96" width="284" height="262" rx="10" fill="#FFFFFF" stroke="#16233A" stroke-width="2"/>
+    <rect x="338" y="96" width="284" height="44" rx="10" fill="#16233A"/>
+    <text x="354" y="125" font-size="17" font-weight="700" fill="#F6F8F6">Frame 1: SENDER</text>
+    <text x="354" y="168" font-size="15" font-weight="700" fill="#16233A">Move the money</text>
+    <text x="354" y="196" font-size="14" fill="#16233A">Pay the recipient</text>
+    <text x="354" y="218" font-size="14" fill="#16233A">Insert the change note</text>
+    <text x="354" y="240" font-size="14" fill="#16233A">Publish the new root</text>
+    <text x="354" y="262" font-size="14" fill="#A8261C" font-weight="700">Cannot revert after APPROVE:</text>
+    <text x="354" y="284" font-size="14" fill="#16233A">a refused payment becomes a claim</text>
+    <line x1="354" y1="302" x2="606" y2="302" stroke="#C9D3CF"/>
+    <text x="354" y="326" font-size="14" font-weight="700" fill="#16233A">184k–246k execution, 379k–477k state</text>
+    <text x="354" y="346" font-size="13" fill="#56667A">Limits 1.5M execution, 1M state</text>
+  </g>
+
+  <path d="M622 226 h22" stroke="#16233A" stroke-width="2"/><path d="M644 226 l-8 -5 v10 z" fill="#16233A"/>
+
+  <g>
+    <rect x="644" y="96" width="284" height="262" rx="10" fill="#FFFFFF" stroke="#56667A" stroke-width="2"/>
+    <rect x="644" y="96" width="284" height="44" rx="10" fill="#56667A"/>
+    <text x="660" y="125" font-size="17" font-weight="700" fill="#F6F8F6">Frame 2: DEFAULT</text>
+    <text x="660" y="168" font-size="15" font-weight="700" fill="#16233A">Give back what gas didn't use</text>
+    <text x="660" y="196" font-size="14" fill="#16233A">Refund the unused fee</text>
+    <text x="660" y="218" font-size="14" fill="#16233A">to the recipient</text>
+    <text x="660" y="240" font-size="14" fill="#16233A">If it fails, only the refund is lost</text>
+    <line x1="660" y1="302" x2="912" y2="302" stroke="#C9D3CF"/>
+    <text x="660" y="326" font-size="14" font-weight="700" fill="#16233A">About 10k gas</text>
+    <text x="660" y="346" font-size="13" fill="#56667A">Limit 150k execution</text>
+  </g>
+
+  <text x="32" y="396" font-size="15" fill="#16233A"><tspan font-weight="700">Why this needs an alt mempool:</tspan> the canonical cap on validation is 100k gas. A staked entity's ERC-8421 budget is 1M.</text>
+  <text x="32" y="418" font-size="13" fill="#56667A">Gas measured on the local stack (ethrex 9aa3645d, patched sidecar). Full figures: docs/gas-report.md</text>
+</svg>

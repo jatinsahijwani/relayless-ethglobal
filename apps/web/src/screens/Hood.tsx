@@ -8,6 +8,7 @@ import { cfg } from "../config";
 import { demo, named } from "../demo";
 import { Button, Problem, Screen, plainError } from "../ui";
 import { watchProving } from "../wallet";
+import frameLayout from "../../../../docs/img/frame-layout.svg";
 
 const num = (n: bigint | number | null) => (n === null ? "unknown" : Number(n).toLocaleString("en"));
 /** The sidecar keeps resolved entries listed for a long time, so only recent ones are news. */
@@ -183,6 +184,10 @@ export function Hood({ s }: { s: Session }) {
     <Screen title="Under the hood">
       <CompareMempools s={s} />
       <LiveMempool s={s} />
+      <section>
+        <h2 className="mb-2 text-2xl font-bold">What a withdrawal is</h2>
+        <img src={frameLayout} className="w-full rounded-lg border border-line" alt="Three frames: VERIFY checks the proof and approves payment, about 253k gas. SENDER pays the recipient, adds the change note and publishes the root, and can't revert. DEFAULT refunds unused fee." />
+      </section>
     </Screen>
   );
 }
