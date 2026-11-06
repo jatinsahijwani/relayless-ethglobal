@@ -6,6 +6,7 @@ import { Deposit } from "./screens/Deposit";
 import { Meter, MeterPanel } from "./screens/Meter";
 import { Activity } from "./screens/Activity";
 import { Recover } from "./screens/Recover";
+import { Hood } from "./screens/Hood";
 import { Approve } from "./screens/Approve";
 import { Directory } from "./ens/Directory";
 import { Names } from "./ens/Names";
@@ -16,7 +17,7 @@ import { Problem, plainError } from "./ui";
 import { cfg } from "./config";
 import { eth } from "./ui";
 
-const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved", "ENS"] as const;
+const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved", "ENS", "Under the hood"] as const;
 export type Tab = (typeof TABS)[number];
 
 export interface Session {
@@ -57,15 +58,15 @@ export function App() {
         <span className="font-display text-xl font-bold">Relayless</span>
         <span className="tnum text-slate">Private balance <strong className="text-ink">{eth(balance)} ETH</strong></span>
       </header>
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 flex border-t-2 border-line bg-paper md:static md:mb-8 md:gap-1 md:border-none md:bg-transparent">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t-2 border-line bg-paper md:static md:mb-8 md:gap-1 md:overflow-visible md:border-none md:bg-transparent">
         {TABS.filter((t) => (t !== "Get approved" || cfg.aspUrl) && (t !== "ENS" || ens)).map((t) => (
-          <button key={t} onClick={() => setTab(t)} aria-current={t === tab ? "page" : undefined} className={`min-h-14 flex-1 px-1 text-sm font-bold md:min-h-10 md:flex-none md:rounded-lg md:px-4 md:text-base ${t === tab ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>
+          <button key={t} onClick={() => setTab(t)} aria-current={t === tab ? "page" : undefined} className={`min-h-14 flex-1 whitespace-nowrap px-3 text-sm font-bold md:min-h-10 md:flex-none md:rounded-lg md:px-4 md:text-base ${t === tab ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>
             {t}
           </button>
         ))}
       </nav>
       {switchError && <Problem>{switchError}</Problem>}
-      <div className={`grid gap-10 ${tab === "Privacy" ? "" : "md:grid-cols-[minmax(0,1fr)_320px]"}`}>
+      <div className={`grid gap-10 ${tab === "Privacy" || tab === "Under the hood" ? "" : "md:grid-cols-[minmax(0,1fr)_320px]"}`}>
         <main>
           {tab === "Pay" && <Pay s={session} />}
           {tab === "Add money" && <Deposit s={session} />}
@@ -73,6 +74,7 @@ export function App() {
           {tab === "Activity" && <Activity s={session} />}
           {tab === "Recover" && <Recover s={session} />}
           {tab === "Get approved" && <Approve s={session} />}
+          {tab === "Under the hood" && <Hood s={session} />}
           {tab === "ENS" && ens && (
             <>
               <NymToggle />
@@ -99,7 +101,7 @@ export function App() {
             </>
           )}
         </main>
-        {tab !== "Privacy" && <aside className="hidden md:block"><MeterPanel s={session} /></aside>}
+        {tab !== "Privacy" && tab !== "Under the hood" && <aside className="hidden md:block"><MeterPanel s={session} /></aside>}
       </div>
     </div>
   );

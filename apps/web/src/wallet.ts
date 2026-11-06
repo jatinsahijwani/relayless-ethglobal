@@ -6,13 +6,21 @@ import { cfg } from "./config";
 
 const worker = new Worker(new URL("./prover.worker.ts", import.meta.url), { type: "module" });
 let nextId = 0;
+const provingWatchers = new Set<(proving: boolean) => void>();
+/** Told when the prover really starts and stops, so a counter on screen shows proving and nothing else. */
+export const watchProving = (f: (proving: boolean) => void) => {
+  provingWatchers.add(f);
+  return () => { provingWatchers.delete(f); };
+};
 const prover: Prover = {
   prove: (circuit, input) =>
     new Promise((resolve, reject) => {
       const id = ++nextId;
+      provingWatchers.forEach((f) => f(true));
       const onMessage = (e: MessageEvent) => {
         if (e.data.id !== id) return;
         worker.removeEventListener("message", onMessage);
+        provingWatchers.forEach((f) => f(false));
         if (e.data.ok) resolve({ proof: e.data.proof, publicSignals: e.data.publicSignals });
         else reject(new Error(e.data.error));
       };
