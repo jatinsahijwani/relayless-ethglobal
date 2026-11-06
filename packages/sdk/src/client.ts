@@ -11,7 +11,8 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
 import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
-import { EMPTY_PROOF, LIMITS, NONCE_MANAGER, buildRagequit, buildWithdrawal, encodeProof, rawOf, sigHashOf, toWire, txHashOf, type FrameTx, type RootRef } from "./frame.js";
+import { DRY_RUN_LIMITS, EMPTY_PROOF, LIMITS, NONCE_MANAGER, buildRagequit, buildWithdrawal, encodeProof, rawOf, sigHashOf, toWire, txHashOf, type FrameTx, type RootRef } from "./frame.js";
+import type { FrameLimits } from "./frame.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
 import { announceCall, deriveStealthPayment, type StealthPayment } from "./stealth.js";
 import { TREE_DEPTH, rootOf, siblings } from "./tree.js";
@@ -91,6 +92,26 @@ export interface WithdrawHandle {
   wait(): Promise<any>;
 }
 
+/** One withdrawal, asked of both mempools. Nothing is sent, so no nullifier is used and no reputation moves. */
+export interface MempoolComparison {
+  verifyGasDeclared: bigint;
+  canonical: { admitted: boolean; reason: string | null; verifyGasUsed: bigint | null };
+  alt: {
+    admitted: boolean;
+    reason: string | null;
+    entity: Address;
+    stake: bigint | null;
+    staked: boolean | null;
+    reputation: { seen: number; included: number; status: string } | null;
+    /** BUDGET-010 for this entity's stake. Our patch's default: 100k unstaked, 1M staked. */
+    budget: bigint | null;
+    verifyGasUsed: bigint | null;
+  };
+}
+
+export const UNSTAKED_BUDGET = 100_000n;
+export const STAKED_BUDGET = 1_000_000n;
+
 export interface FeeCaps {
   maxFeePerGas: bigint;
   maxPriorityFeePerGas: bigint;
@@ -158,6 +179,10 @@ export class Relayless {
 
   private async call(functionName: "ROOT_SALT" | "ASP_SOURCE_ID" | "reserve" | "liabilities"): Promise<any> {
     return rpc(this.o.rpc, "eth_call", [{ to: this.o.pool, data: encodeFunctionData({ abi: POOL_ABI, functionName }) }, "latest"]);
+  }
+
+  get poolAddress(): Address {
+    return this.o.pool;
   }
 
   /** Asks the wallet for the one signature everything derives from. Kept in memory only. */
@@ -329,6 +354,75 @@ export class Relayless {
   }
 
   /**
+   * Several payments, each from its own note, proved first and then sent together. They are all pending at the same
+   * moment because each has its own nullifier as a nonce key. Throws before sending anything if a proof or simulation fails.
+   */
+  async payMany(payments: { to: Address; amount: bigint }[]): Promise<WithdrawHandle[]> {
+    await this.unlock();
+    await this.settleInFlight();
+    const notes = await this.notes();
+    const state = this.state!;
+    const caps = await this.feeCaps();
+    const free = notes.filter((n) => !n.spent && !this.store.get(n.nullifierHash)).sort((a, b) => (a.value < b.value ? 1 : -1));
+    if (free.length < payments.length) throw new Error(`this needs ${payments.length} separate notes, and ${free.length} are free`);
+    const ready = [];
+    for (const [i, p] of payments.entries()) {
+      if (free[i].value < p.amount) throw new Error("a note doesn't cover its payment");
+      const { tx, fee, proveMs } = await this.prepare(free[i], p, 0n, state, caps);
+      await this.preflight(tx);
+      ready.push({ tx, fee, proveMs, note: free[i], p });
+    }
+    return Promise.all(ready.map(async ({ tx, fee, proveMs, note, p }) => {
+      const hash = await this.submit(tx, note.nullifierHash, caps);
+      return { hash, nullifierHash: note.nullifierHash, recipient: p.to, amount: p.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
+    }));
+  }
+
+  /**
+   * Asks the canonical mempool's rules (ethrex) and the alt mempool (sidecar) about the same withdrawal, without sending it.
+   * The sidecar's dry run overwrites the limits of every frame after VERIFY, and those are part of sigHash, so the proof
+   * is made for those limits and both nodes get those exact bytes. VERIFY, which is what gets judged, is untouched.
+   */
+  async compareMempools(opts: { to: Address; amount: bigint }): Promise<MempoolComparison> {
+    await this.unlock();
+    const notes = await this.notes();
+    const state = this.state!;
+    const note = this.pickNote(notes, opts.amount, 0n, state);
+    // The placeholder limits are huge, so the fee cap is kept near the base fee or maxCost would pass the amount.
+    const block = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
+    const maxFeePerGas = BigInt(block.baseFeePerGas) * 2n + 2n;
+    const { tx } = await this.prepare(note, opts, 0n, state, { maxFeePerGas, maxPriorityFeePerGas: 1n }, DRY_RUN_LIMITS);
+
+    const sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
+    const verifyGasUsed = sim.frames?.[0]?.gasUsed ? BigInt(sim.frames[0].gasUsed) : null;
+
+    let reason: string | null = null;
+    let estimate: any = null;
+    try {
+      estimate = await rpc(this.o.mempool, "eth_estimateFrameTransactionGas", [toWire(tx)]);
+    } catch (e) {
+      reason = e instanceof Error ? e.message : String(e);
+    }
+    const reputation = await rpc(this.o.mempool, "skandha_explorer_listReputation", [{ limit: 200 }]).catch(() => null);
+    const entry = reputation?.items?.find((x: any) => x.address?.toLowerCase() === this.o.pool.toLowerCase());
+    const staked: boolean | null = entry ? Boolean(entry.isStaked) : null;
+    return {
+      verifyGasDeclared: DRY_RUN_LIMITS.verifyExecution,
+      canonical: { admitted: Boolean(sim.canonicalMempoolValid), reason: sim.canonicalMempoolViolation ?? null, verifyGasUsed },
+      alt: {
+        admitted: estimate !== null,
+        reason,
+        entity: this.o.pool,
+        stake: entry ? BigInt(entry.stake) : null,
+        staked,
+        reputation: entry ? { seen: entry.opsSeen, included: entry.opsIncluded, status: entry.status } : null,
+        budget: staked === null ? null : staked ? STAKED_BUDGET : UNSTAKED_BUDGET,
+        verifyGasUsed,
+      },
+    };
+  }
+
+  /**
    * Pays a stealth meta-address, usually read from an ENS name: one new address, with its announcement, from the pool.
    *
    * The pool's validator pins each withdrawal's frames, so a payment can't carry its own announcement, and the payer's
@@ -425,7 +519,7 @@ export class Relayless {
   }
 
   /** Builds and proves a withdrawal without sending it. */
-  async prepare(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps): Promise<{ tx: FrameTx; fee: bigint; proveMs: number }> {
+  async prepare(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps, limits: FrameLimits = LIMITS): Promise<{ tx: FrameTx; fee: bigint; proveMs: number }> {
     const leaves = state.leaves;
     const { ref, root } = await this.latestRootRef(state);
     const treeLeaves = leaves.slice(0, root.leafCount);
@@ -437,7 +531,7 @@ export class Relayless {
     const base = { pool: this.o.pool, chainId: this.chainId, recipient: opts.to, amount: opts.amount, changeCommitment, nullifierHash: note.nullifierHash, k, refs: asp ? [ref, asp.ref] : [ref], ...caps };
 
     // Fee = the most this can cost, rounded up. The unused part comes back to the recipient from frame 2.
-    const fee = ((await this.maxCostOf(buildWithdrawal({ ...base, fee: opts.amount }, EMPTY_PROOF))) * 101n) / 100n;
+    const fee = ((await this.maxCostOf(buildWithdrawal({ ...base, fee: opts.amount }, EMPTY_PROOF, limits))) * 101n) / 100n;
     if (fee >= opts.amount) throw new Error(`the amount must be above the refundable gas deposit of ${fee} wei`);
     await this.checkSolvency(fee, opts.amount - fee);
 
@@ -447,7 +541,7 @@ export class Relayless {
       nullifierHash: note.nullifierHash.toString(),
       changeCommitment: changeCommitment.toString(),
       withdrawnValue: opts.amount.toString(),
-      sigHash: (BigInt(sigHashOf(buildWithdrawal(params, "0x"))) % R).toString(),
+      sigHash: (BigInt(sigHashOf(buildWithdrawal(params, "0x", limits))) % R).toString(),
       k: k.toString(),
       aspRoot: asp ? BigInt(asp.ref.root).toString() : "0",
       value: note.value.toString(),
@@ -466,7 +560,7 @@ export class Relayless {
     const t = Date.now();
     const { proof } = await this.o.prover.prove("withdraw", input);
     const proveMs = Date.now() - t;
-    return { tx: buildWithdrawal(params, encodeProof(proof)), fee, proveMs };
+    return { tx: buildWithdrawal(params, encodeProof(proof), limits), fee, proveMs };
   }
 
   /** Simulates first: a transaction that would fail must never be broadcast. */

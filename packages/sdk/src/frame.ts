@@ -19,6 +19,21 @@ export const LIMITS = {
   refundExecution: 150_000n,
 };
 
+export type FrameLimits = typeof LIMITS & { refundState?: bigint };
+
+/**
+ * What the sidecar's dry run (`eth_estimateFrameTransactionGas`) overwrites every frame after the validation prefix with.
+ * Those limits are part of sigHash, which the proof commits to, so a dry-run proof has to be made for them.
+ */
+const ESTIMATE_PLACEHOLDER = 10_000_000n;
+export const DRY_RUN_LIMITS: FrameLimits = {
+  verifyExecution: LIMITS.verifyExecution,
+  senderExecution: ESTIMATE_PLACEHOLDER,
+  senderState: ESTIMATE_PLACEHOLDER,
+  refundExecution: ESTIMATE_PLACEHOLDER,
+  refundState: ESTIMATE_PLACEHOLDER,
+};
+
 export interface RootRef { sourceId: Hex; slot: bigint; root: Hex }
 
 export interface WithdrawalParams {
@@ -38,16 +53,16 @@ export interface WithdrawalParams {
 const ARBITRARY = () => lib.sigScheme(profile, "ARBITRARY");
 export const EMPTY_PROOF: Hex = `0x${"00".repeat(256)}`;
 
-export function buildWithdrawal(p: WithdrawalParams, proof: Hex = EMPTY_PROOF): FrameTx {
+export function buildWithdrawal(p: WithdrawalParams, proof: Hex = EMPTY_PROOF, limits: FrameLimits = LIMITS): FrameTx {
   const frames = [
-    lib.frame(profile, "VERIFY", { scope: "EXECUTION_AND_PAYMENT", target: null, execution: LIMITS.verifyExecution }),
+    lib.frame(profile, "VERIFY", { scope: "EXECUTION_AND_PAYMENT", target: null, execution: limits.verifyExecution }),
     lib.frame(profile, "SENDER", {
       target: p.pool,
-      execution: LIMITS.senderExecution,
-      state: LIMITS.senderState,
+      execution: limits.senderExecution,
+      state: limits.senderState,
       data: encodeFunctionData({ abi: POOL_ABI, functionName: "withdraw", args: [p.recipient, p.amount, p.fee, p.changeCommitment, p.nullifierHash, p.k] }),
     }),
-    lib.frame(profile, "DEFAULT", { target: p.pool, execution: LIMITS.refundExecution, data: encodeFunctionData({ abi: POOL_ABI, functionName: "refund" }) }),
+    lib.frame(profile, "DEFAULT", { target: p.pool, execution: limits.refundExecution, state: limits.refundState, data: encodeFunctionData({ abi: POOL_ABI, functionName: "refund" }) }),
   ];
   return {
     ...lib.newTx({

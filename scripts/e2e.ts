@@ -174,6 +174,25 @@ const splitReceived = await balanceOf(cfg, splitTo);
 check("the recipient gets the whole amount, less only gas", splitReceived < parseEther("0.15") && splitReceived > parseEther("0.149"), eth(splitReceived));
 check("the rest stays as a recoverable change note", (await splitter.balance()) === parseEther("0.05"), eth(await splitter.balance()));
 
+// ---- Sent together: all pending at the same moment, each on its own nonce key ----
+const batchKey = await fundedKey(cfg, deployerKey, "batcher", parseEther("1"));
+const batcher = await connect(cfg, batchKey);
+for (let i = 0; i < 3; i++) await mined(cfg, (await batcher.deposit({ amount: parseEther("0.05") })).hash);
+const batch = await batcher.payMany([freshAddr(), freshAddr(), freshAddr()].map((to) => ({ to, amount: parseEther("0.01") })));
+const listed = await rpc(cfg.mempool, "skandha_explorer_listTransactions", [{ limit: 50 }]);
+const batchKeys = new Set(listed.items.filter((t: any) => batch.some((b) => b.hash === t.txHash)).flatMap((t: any) => t.nonceKeys.map(String)));
+check("payMany: the node lists all 3 at once, each with its own nonce key", batchKeys.size === 3, `${batchKeys.size} keys listed`);
+check("payMany: all 3 land", (await Promise.all(batch.map((b) => b.wait()))).every((r) => r === null || r.status === "0x1"));
+
+// ---- The mempool comparison: a dry run on both nodes, which changes nothing ----
+const repOf = async () => (await rpc(cfg.mempool, "skandha_explorer_listReputation", [{ limit: 200 }])).items.find((e: any) => e.address?.toLowerCase() === cfg.pool.toLowerCase());
+const lastAdmission = async () => (await rpc(cfg.mempool, "skandha_explorer_listAdmissions", [{ limit: 1 }])).items[0]?.id;
+const compareBefore = { rep: await repOf(), admission: await lastAdmission(), balance: await batcher.balance() };
+const compared = await batcher.compareMempools({ to: freshAddr(), amount: parseEther("0.02") });
+check("dry run: the canonical rules reject the withdrawal, naming the cap", !compared.canonical.admitted && /MAX_VERIFY_GAS/.test(compared.canonical.reason ?? ""), compared.canonical.reason ?? "");
+check("dry run: the alt mempool would admit the same bytes", compared.alt.admitted && compared.alt.staked === true, `${compared.alt.verifyGasUsed} of ${compared.alt.budget} gas`);
+check("dry run: nothing was sent, spent or counted", (await lastAdmission()) === compareBefore.admission && (await batcher.balance()) === compareBefore.balance && (await repOf()).opsSeen <= compareBefore.rep.opsSeen);
+
 // ---- Public exit ----
 const exitNote = (await rl.notes()).find((n) => !n.spent && n.value >= parseEther("0.03")) as Note;
 const depositor = exitNote.depositor;
