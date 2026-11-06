@@ -52,15 +52,16 @@ Building this surfaced three things, each reproducible:
 [Steps to reproduce 2 and 3, and our patch](docs/repro-gateway.md). [How a shared sender can be griefed](docs/reputation-analysis.md).
 
 ## Run it
-Needs Docker, Node, pnpm, Foundry and circom.
+Needs Docker (running), Node, pnpm and Foundry. From a fresh clone, one command brings up a private local chain and the patched alt mempool, then deploys:
 
 ```sh
-pnpm install
-pnpm build:circuits
-pnpm build:contracts
-scripts/local-stack.sh   # local chain and patched alt mempool, then deploys; about 15 minutes the first time
+scripts/local-stack.sh   # about 13 minutes the first time: frame transactions activate about 11 minutes after genesis
 pnpm web                 # http://127.0.0.1:5199
 ```
+
+Everything binds to localhost, and the keys it creates are throwaway. It's safe to rerun: it reuses a running stack and deploys a fresh pool. To stop, run the command it prints at the end.
+
+The association-set pool and World ID are optional: see [docs/world-id-setup.md](docs/world-id-setup.md).
 
 Tests:
 

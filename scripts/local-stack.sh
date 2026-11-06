@@ -12,6 +12,17 @@ RPC=http://127.0.0.1:18545
 SIDECAR_COMMIT=2e22ff0a2898e69ea4bf5275bce1be8581a8582a
 mkdir -p "$WORK"
 
+for tool in docker node pnpm forge cast git curl openssl; do
+  command -v "$tool" >/dev/null || { echo "missing: $tool"; exit 1; }
+done
+docker info >/dev/null 2>&1 || { echo "Docker isn't running: start it and try again"; exit 1; }
+for port in 18545 14337; do
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && [ ! -d "$SIDECAR/deploy/devnet/data" ]; then
+    echo "port $port is in use by something else: stop it and try again"; exit 1
+  fi
+done
+(cd "$ROOT" && pnpm install --silent)
+
 if [ ! -d "$SIDECAR" ]; then
   GIT_CONFIG_GLOBAL=/dev/null git clone --quiet https://github.com/forshtat/mempool-workshop-sidecar.git "$SIDECAR"
   git -C "$SIDECAR" checkout --quiet "$SIDECAR_COMMIT"
