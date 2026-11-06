@@ -16,7 +16,8 @@
     "web": "pnpm --filter @relayless/web dev",
     "test:asp": "pnpm --filter @relayless/asp test",
     "demo:asp": "scripts/demo-asp.sh",
-    "demo:seed": "tsx scripts/demo-seed.ts"
+    "demo:seed": "tsx scripts/demo-seed.ts",
+    "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",
