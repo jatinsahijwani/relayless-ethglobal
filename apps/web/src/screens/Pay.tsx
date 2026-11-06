@@ -3,7 +3,7 @@ import { isAddress, parseEther, type Address, type Hex } from "viem";
 import type { Session } from "../App";
 import { Button, Field, Problem, Screen, eth, inputClass, plainError } from "../ui";
 import { addActivity, nextFreshIndex, walletBalance } from "../wallet";
-import { named } from "../demo";
+import { demo, named } from "../demo";
 import { UnderTheHood } from "./UnderTheHood";
 import { useProvingClock } from "./Hood";
 
@@ -112,9 +112,9 @@ export function Pay({ s }: { s: Session }) {
           <Field label="Amount in ETH" hint={parts ? "No single note covers this, so it goes out as several payments, all at once." : `You have ${eth(available)} ETH. A little is held for gas, and what isn't used comes back.`}>
             <input className={inputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} />
           </Field>
-          <Field label={`Only spend money with at least ${minAnon} notes added after it`} hint="Enforced in the proof, and visible on-chain. Higher hides you better but may mean waiting. 0 turns it off.">
+          {!demo && <Field label={`Only spend money with at least ${minAnon} notes added after it`} hint="Enforced in the proof, and visible on-chain. Higher hides you better but may mean waiting. 0 turns it off.">
             <input type="range" className="w-full accent-pool" min={0} max={Math.max(32, leaves)} value={minAnon} onChange={(e) => setMinAnon(Number(e.target.value))} disabled={busy} />
-          </Field>
+          </Field>}
           <Button className="w-full" disabled={!valid || busy} onClick={pay}>{busy ? "Paying…" : `Pay ${amount} ETH`}</Button>
           {error && <Problem>{error}</Problem>}
         </div>

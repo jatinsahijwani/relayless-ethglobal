@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Relayless, Signer } from "@relayless/sdk";
 import { Button, Problem, plainError } from "../ui";
-import { browserSigner, connectPool, hasBrowserWallet, testSigner } from "../wallet";
+import { browserSigner, connectPool, demoSigner, hasBrowserWallet, testSigner } from "../wallet";
+import { demo } from "../demo";
 import { LiveQr } from "../Findings";
 import { cfg } from "../config";
 
@@ -32,11 +33,12 @@ export function Connect({ onConnected }: { onConnected(c: { rl: Relayless; signe
         <p className="mt-4 max-w-md text-lg">Put money in. Later, send it anywhere, even to a brand-new wallet holding zero ETH. Nobody funds that wallet, and no relayer sees you.</p>
         <p className="mt-3 max-w-md text-slate">Your wallet signs once. That signature is your only backup, so there's nothing new to write down.</p>
         <div className="mt-5 flex flex-col items-start gap-1">
-          {hasBrowserWallet() && <Button disabled={busy} onClick={() => start(browserSigner)}>Connect wallet</Button>}
-          <Button variant={hasBrowserWallet() ? "quiet" : "primary"} disabled={busy} onClick={() => start(testSigner)}>{busy ? "Connecting…" : "Use a test wallet"}</Button>
+          {demo && <Button disabled={busy} onClick={() => start(demoSigner)}>{busy ? "Connecting…" : "Use the demo wallet"}</Button>}
+          {!demo && hasBrowserWallet() && <Button disabled={busy} onClick={() => start(browserSigner)}>Connect wallet</Button>}
+          <Button variant={demo || hasBrowserWallet() ? "quiet" : "primary"} disabled={busy} onClick={() => start(testSigner)}>{busy ? "Connecting…" : "Use a test wallet"}</Button>
         </div>
         {error && <Problem>{error}</Problem>}
-        <p className="mt-3 text-sm text-slate">Test network only ({cfg.name}). Don't use real funds. <a href="/findings" className="underline underline-offset-4">What we found building this</a></p>
+        <p className="mt-3 text-sm text-slate">Test network only ({cfg.name}). Don't use real funds. <a href={demo ? "/findings?demo=1" : "/findings"} className="underline underline-offset-4">What we found building this</a></p>
         <LiveQr className="mt-3" />
       </div>
       <svg viewBox="0 0 280 240" className="w-full" aria-hidden="true">

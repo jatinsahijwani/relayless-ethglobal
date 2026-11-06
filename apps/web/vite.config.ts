@@ -30,7 +30,7 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5199,
+    port: Number(process.env.RELAYLESS_WEB_PORT ?? 5199),
     strictPort: true,
     proxy: isLocal
       ? {

@@ -57,6 +57,24 @@ export function testSigner(): Signer {
   };
 }
 
+/**
+ * Demo only: the wallet `pnpm demo:reset` funded and approved. The dev server serves it, git ignores it, and the key is
+ * never shown. A new one starts this browser clean, so each take begins with fresh addresses.
+ */
+export async function demoSigner(): Promise<Signer> {
+  const res = await fetch("/demo-wallet.json");
+  if (!res.ok || !res.headers.get("content-type")?.includes("json")) throw new Error("No demo wallet yet. Run pnpm demo:reset, then try again.");
+  const wallet = (await res.json()) as { id: string; key: Hex };
+  if (read("relayless.demoId") !== wallet.id) {
+    for (const k of ["relayless.freshIndex", "relayless.activity", "relayless.inflight"]) {
+      try { localStorage.removeItem(k); } catch { /* blocked storage: nothing to clear */ }
+    }
+    write("relayless.demoId", wallet.id);
+    write("relayless.testKey", wallet.key);
+  }
+  return testSigner();
+}
+
 export const hasBrowserWallet = () => Boolean((window as any).ethereum);
 
 export async function browserSigner(): Promise<Signer> {
