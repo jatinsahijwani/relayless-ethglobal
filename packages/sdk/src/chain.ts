@@ -71,15 +71,18 @@ export interface PoolState {
  * blocks, after which any range touching them errors. Skipped blocks are safe only because fetchPoolState checks the
  * result: if a gap hid one of the pool's leaves, it fails rather than building a wrong tree.
  */
-async function logsAround(rpcUrl: string, pool: Address, lo: number, hi: number): Promise<any[]> {
+export async function logsAround(rpcUrl: string, address: Address, lo: number, hi: number, topics?: Hex[], skipped?: number[]): Promise<any[]> {
   if (lo > hi) return [];
   try {
-    return await rpc<any[]>(rpcUrl, "eth_getLogs", [{ address: pool, fromBlock: `0x${lo.toString(16)}`, toBlock: `0x${hi.toString(16)}` }]);
+    return await rpc<any[]>(rpcUrl, "eth_getLogs", [{ address, fromBlock: `0x${lo.toString(16)}`, toBlock: `0x${hi.toString(16)}`, ...(topics ? { topics } : {}) }]);
   } catch (e) {
     if (!(e instanceof RpcError) || !/could not get header/i.test(e.message)) throw e;
-    if (lo === hi) return [];
+    if (lo === hi) {
+      skipped?.push(lo);
+      return [];
+    }
     const mid = lo + Math.floor((hi - lo) / 2);
-    return [...(await logsAround(rpcUrl, pool, lo, mid)), ...(await logsAround(rpcUrl, pool, mid + 1, hi))];
+    return [...(await logsAround(rpcUrl, address, lo, mid, topics, skipped)), ...(await logsAround(rpcUrl, address, mid + 1, hi, topics, skipped))];
   }
 }
 

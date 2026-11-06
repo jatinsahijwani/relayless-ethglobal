@@ -17,7 +17,8 @@ const state = loadState();
 const startBalance = await pub.getBalance({ address: me });
 if (startBalance === 0n) throw new Error(`fund ${me} with Sepolia ETH first`);
 console.log(`curator ${me}, ${formatEther(startBalance)} ETH`);
-const startBlock = await pub.getBlockNumber();
+state.startBlock ??= Number(await pub.getBlockNumber());
+saveState(state);
 
 const read = (address: Address, abi: any, functionName: string, args: unknown[] = []) => pub.readContract({ address, abi, functionName, args } as any) as Promise<any>;
 
@@ -90,6 +91,7 @@ if (!cfg.claimer) {
   const receipt = await pub.waitForTransactionReceipt({ hash, timeout: 240_000 });
   if (receipt.status !== "success") throw new Error(`claimer deploy reverted: ${hash}`);
   cfg.claimer = receipt.contractAddress;
+  saveEnsConfig(cfg);
   console.log(`claimer ${cfg.claimer}: ${cfg.explorer}/tx/${hash}`);
 }
 if (!(await read(r1, REGISTRY_ABI, "hasRootRoles", [REG.REGISTRAR, cfg.claimer]))) await write("claimer role", r1, REGISTRY_ABI, "grantRootRoles", [REG.REGISTRAR, cfg.claimer]);
@@ -100,7 +102,7 @@ if (await read(r2, REGISTRY_ABI, "hasRootRoles", [REG.SET_PARENT, me])) await wr
 
 if (!(await read(r1, REGISTRY_ABI, "isEmancipated")) || !(await read(r2, REGISTRY_ABI, "isEmancipated"))) throw new Error("a registry isn't emancipated: stop and investigate");
 
-cfg.deployBlock ??= Number(startBlock);
+cfg.deployBlock ??= state.startBlock;
 saveEnsConfig(cfg);
 const spent = startBalance - (await pub.getBalance({ address: me }));
 console.log(`done. R1 ${r1}, R2 ${r2}, claimer ${cfg.claimer}. Spent ${formatEther(spent)} ETH this run.`);

@@ -7,11 +7,13 @@
 //  - the transaction is simulated before it is broadcast;
 //  - a nullifier is never sent twice, except as a fee bump replacing the pending transaction.
 import { concat, encodeFunctionData, keccak256, numberToHex, parseEther, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
 import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
 import { EMPTY_PROOF, LIMITS, NONCE_MANAGER, buildRagequit, buildWithdrawal, encodeProof, rawOf, sigHashOf, toWire, txHashOf, type FrameTx, type RootRef } from "./frame.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
+import { announceCall, deriveStealthPayment, type StealthPayment } from "./stealth.js";
 import { TREE_DEPTH, rootOf, siblings } from "./tree.js";
 
 export interface Signer {
@@ -129,6 +131,10 @@ export function planPayment(notes: Note[], amount: bigint, k: bigint, leafCount:
   if (left > 0n) throw new Error("not enough available balance for that amount");
   return plan;
 }
+
+/** Room above a withdrawal's frame limits for its intrinsic gas. */
+const WITHDRAWAL_GAS_MARGIN = 300_000n;
+const ANNOUNCE_GAS = 120_000n;
 
 export class Relayless {
   private master?: bigint;
@@ -320,6 +326,43 @@ export class Relayless {
     // One at a time: if a later part is refused, the earlier ones are already out, and the caller knows which.
     for (const part of plan) handles.push(await this.withdraw({ to: opts.to, amount: part.amount, note: part.note, minAnon: opts.minAnon }));
     return handles;
+  }
+
+  /**
+   * Pays a stealth meta-address, usually read from an ENS name: one new address, with its announcement, from the pool.
+   *
+   * The pool's validator pins each withdrawal's frames, so a payment can't carry its own announcement, and the payer's
+   * wallet can't send it without linking itself. So a second withdrawal funds a new throwaway wallet, which announces.
+   * The announcement goes first: if anything fails before the payment, no money has gone anywhere it can't be found.
+   * A wallet is never reused, because a shared announcer would link the payments it announced.
+   */
+  async payStealth(opts: { metaAddress: string; amount: bigint; announcer: Address; minAnon?: number }): Promise<{ payment: StealthPayment; announceHash: Hex; handles: WithdrawHandle[] }> {
+    await this.unlock();
+    await this.settleInFlight();
+    const payment = deriveStealthPayment(opts.metaAddress);
+    const caps = await this.feeCaps();
+    const block = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
+    const announceGasPrice = BigInt(block.baseFeePerGas) * 3n + 1000n;
+    const funding = (LIMITS.verifyExecution + LIMITS.senderExecution + LIMITS.senderState + LIMITS.refundExecution + WITHDRAWAL_GAS_MARGIN) * caps.maxFeePerGas + ANNOUNCE_GAS * announceGasPrice;
+    const available = (await this.notes()).filter((n) => !n.spent && !this.store.get(n.nullifierHash)).reduce((t, n) => t + n.value, 0n);
+    if (available < opts.amount + funding) throw new Error(`a private name payment also needs about ${funding} wei to publish its announcement, and this balance doesn't cover both`);
+
+    const announcerKey = generatePrivateKey();
+    const announcer = privateKeyToAccount(announcerKey);
+    const funded = await this.withdraw({ to: announcer.address, amount: funding, minAnon: opts.minAnon });
+    await funded.wait();
+    const nonce = 0;
+    const raw = await announcer.signTransaction({ chainId: this.chainId, nonce, to: opts.announcer, data: announceCall(payment), gas: ANNOUNCE_GAS, gasPrice: announceGasPrice, type: "legacy" });
+    const announceHash = await rpc<Hex>(this.o.rpc, "eth_sendRawTransaction", [raw]);
+    let receipt: any = null;
+    for (let i = 0; i < 90 && !receipt; i++) {
+      receipt = await rpc(this.o.rpc, "eth_getTransactionReceipt", [announceHash]);
+      if (!receipt) await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!receipt || receipt.status !== "0x1") throw new Error("the announcement didn't land, so the payment wasn't sent. Your money is safe: try again");
+
+    const handles = await this.pay({ to: payment.stealthAddress, amount: opts.amount, minAnon: opts.minAnon });
+    return { payment, announceHash, handles };
   }
 
   async withdraw(opts: WithdrawOptions): Promise<WithdrawHandle> {

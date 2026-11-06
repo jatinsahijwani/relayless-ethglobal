@@ -37,9 +37,10 @@ for (const [who, address] of [["owner", owner.account.address], ["operator", ope
   if ((await pub.getBalance({ address })) < MIN_BALANCE) await curator.sendEth(`gas for ${who} ${address}`, address, TOP_UP);
 }
 
-const r1: Address = await pub.readContract({ address: cfg.contracts.ethRegistry, abi: REGISTRY_ABI, functionName: "getSubregistry", args: [cfg.names.parentLabel] });
-const r2: Address = await pub.readContract({ address: r1, abi: REGISTRY_ABI, functionName: "getSubregistry", args: [cfg.names.directoryLabel] });
-let resolver: Address = await pub.readContract({ address: r2, abi: REGISTRY_ABI, functionName: "getResolver", args: [a.label] });
+const read = (address: Address, functionName: string, args: unknown[]) => pub.readContract({ address, abi: REGISTRY_ABI, functionName, args } as any) as Promise<any>;
+const r1: Address = await read(cfg.contracts.ethRegistry, "getSubregistry", [cfg.names.parentLabel]);
+const r2: Address = await read(r1, "getSubregistry", [cfg.names.directoryLabel]);
+let resolver: Address = await read(r2, "getResolver", [a.label]);
 
 if (resolver === ZERO) {
   // The owner configures its resolver first, so the name is never live with half its records.
