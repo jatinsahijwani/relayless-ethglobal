@@ -24,6 +24,7 @@ The pool's label scheme and public-exit design also follow theirs.
 - **viem** (MIT).
 - **@scopelift/stealth-address-sdk** (MIT): ERC-5564 scheme 1 derivation, checking and key recovery. Only its crypto functions are imported, and it's used as a dependency, not copied.
 - **@noble/secp256k1**, **@noble/hashes** (MIT): curve operations and key derivation.
+- **@nymproject/mix-fetch**, **@nymproject/mix-tunnel** (Apache-2.0): the optional mixnet route, used as dependencies and loaded only when it's turned on.
 
 ## Standards and interfaces
 - `packages/ens/src/ERC5564Announcer.sol` implements the interface from [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) (CC0).

@@ -70,6 +70,19 @@ Gas was about 18 wei, so the whole deployment and test run used under 0.000001 E
 - `/join` in the browser after the ENS work: `scripts/e2e.ts` covers the pool, not the World ID screen.
 - ENSIP-26 agent records: not added.
 
+## Nym mixnet
+On the `nym` branch, off by default, and waiting for the author's check on a phone and a laptop before merging. Details are in [docs/nym-notes.md](docs/nym-notes.md).
+
+| Check | Result |
+|---|---|
+| Deployed preview, 6 full runs with Nym on, laptop | 4 worked, 2 ended in the failure message |
+| Browser requests to a Sepolia RPC with Nym on | None |
+| Nym off | Default; 18 MB chunk not fetched, no Nym hosts contacted |
+| Local app with Nym on | Sepolia routed, local chain and approval server direct, verdicts right |
+| SDK tests | 43/43 |
+
+**Not tested yet:** a phone, a slow connection, a real wallet, a claim with Nym on, and Tor. `/join` and paying were not run again in the browser.
+
 ## Griefing, measured
 | Experiment | Result |
 |---|---|
