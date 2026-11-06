@@ -79,7 +79,9 @@ Directly, on the same page: directory 9–10 s, `alice` about 1 s, roles 2–3 s
 
 Each failed run ended in the failure message, with no request to any RPC from the browser. Directory times include the tunnel, and include the first load of the 18 MB chunk only as far as this laptop's connection goes.
 
-**Not measured:** a phone, a slow connection, or a real wallet claim with Nym on. These 6 runs are a small sample from one machine on one evening, so the success rate is a rough guide.
+**By hand:** the author reports it working in 4 tests and on a phone, without timings.
+
+**Not measured:** timings on a phone, a slow connection, or a real wallet claim with Nym on. These 6 runs are a small sample from one machine on one evening, so the success rate is a rough guide.
 
 ## What the design does with this
 - **Mode per page load.** `?nym=1` decides it, so a routed page sends nothing direct, even on its first read. The toggle reloads the page, which also gives a new tunnel a clean start.

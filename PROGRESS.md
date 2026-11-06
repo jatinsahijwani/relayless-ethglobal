@@ -71,7 +71,7 @@ Gas was about 18 wei, so the whole deployment and test run used under 0.000001 E
 - ENSIP-26 agent records: not added.
 
 ## Nym mixnet
-On the `nym` branch, off by default, and waiting for the author's check on a phone and a laptop before merging. Details are in [docs/nym-notes.md](docs/nym-notes.md).
+Live and off by default. Details are in [docs/nym-notes.md](docs/nym-notes.md).
 
 | Check | Result |
 |---|---|
@@ -80,8 +80,9 @@ On the `nym` branch, off by default, and waiting for the author's check on a pho
 | Nym off | Default; 18 MB chunk not fetched, no Nym hosts contacted |
 | Local app with Nym on | Sepolia routed, local chain and approval server direct, verdicts right |
 | SDK tests | 43/43 |
+| Author's own check on the preview, by hand | Reported working in 4 tests, and on a phone. Not timed |
 
-**Not tested yet:** a phone, a slow connection, a real wallet, a claim with Nym on, and Tor. `/join` and paying were not run again in the browser.
+**Not tested yet:** a slow connection, a real wallet, a claim with Nym on, and Tor. `/join` and paying were not run again in the browser. All timings are from the laptop runs.
 
 ## Griefing, measured
 | Experiment | Result |
