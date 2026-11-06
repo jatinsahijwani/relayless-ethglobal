@@ -42,7 +42,8 @@ export async function rpc<T = any>(url: string, method: string, params: unknown[
  */
 export async function nonceSettled(url: string, hash: Hex, timeoutMs = 30_000): Promise<void> {
   const tx = await rpc(url, "eth_getTransactionByHash", [hash]);
-  if (!tx) return;
+  // Frame transactions use keyed nonces, so they have no account nonce to wait for.
+  if (!tx || tx.nonce === undefined) return;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const pending = BigInt(await rpc(url, "eth_getTransactionCount", [tx.from, "pending"]));

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
-import { POOL_ABI, fetchPoolState, anonymity, planPayment, depositSecrets, changeSecrets, masterFromSignature, nonceSlot, MemoryStore, siblings, rootOf, TREE_DEPTH, type Note } from "../src/index.js";
+import { POOL_ABI, fetchPoolState, nonceSettled, anonymity, planPayment, depositSecrets, changeSecrets, masterFromSignature, nonceSlot, MemoryStore, siblings, rootOf, TREE_DEPTH, type Note } from "../src/index.js";
 import type { PoolState, DepositEvent } from "../src/chain.js";
 
 const A = "0x00000000000000000000000000000000000000a1" as const;
@@ -157,6 +157,38 @@ test("fetchPoolState: other node errors are not swallowed", async () => {
   }) as any;
   try {
     await assert.rejects(fetchPoolState("http://node", A), /rate limited/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("nonceSettled: returns at once for a frame transaction, which has no account nonce", async () => {
+  const original = globalThis.fetch;
+  const methods: string[] = [];
+  globalThis.fetch = (async (_: string, init: any) => {
+    const { method } = JSON.parse(init.body);
+    methods.push(method);
+    return { json: async () => ({ jsonrpc: "2.0", id: 1, result: { hash: "0x01", from: A, type: "0x6" } }) };
+  }) as any;
+  try {
+    await nonceSettled("http://node", "0x01");
+    assert.deepEqual(methods, ["eth_getTransactionByHash"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("nonceSettled: waits until the account nonce has moved past a normal transaction", async () => {
+  const original = globalThis.fetch;
+  let counts = 0;
+  globalThis.fetch = (async (_: string, init: any) => {
+    const { method } = JSON.parse(init.body);
+    const result = method === "eth_getTransactionByHash" ? { from: A, nonce: "0x5" } : ++counts <= 2 ? "0x5" : "0x6";
+    return { json: async () => ({ jsonrpc: "2.0", id: 1, result }) };
+  }) as any;
+  try {
+    await nonceSettled("http://node", "0x01");
+    assert.ok(counts >= 4);
   } finally {
     globalThis.fetch = original;
   }
