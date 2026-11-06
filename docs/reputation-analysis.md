@@ -51,21 +51,22 @@ Fuzz tests and adversarial-recipient tests cover this in `packages/contracts/tes
 ### Measured
 | Experiment | Result |
 |---|---|
-| One note, 8 replacements, one node | Accepted 8 of 8 in **278 ms**: `seen` 0 → 8, then `included` 1 once one landed |
-| Same note to two nodes (2 notes) | Both nodes admitted both. Mining node: `seen +2, included +2`. Non-mining node: **`seen 2, included 0`** |
-| Honest full e2e, one deliberate bump | Settled at `seen 9, included 8`. **The whole gap is the one replacement** |
+| One note, 8 replacements, one node, **before the fix** | Accepted 8 of 8 in **278 ms**: `seen` 0 → 8, then `included` 1 once one landed |
+| Same attack, **after the fix** | Accepted 8 of 8 in 221 ms: `seen` 0 → **1**, then `included` 1 |
+| Same note to two nodes (2 notes), after the fix | Both nodes admitted both. Mining node: `seen +2, included +2`. Non-mining node: **`seen 2, included 0`** |
+| Honest full e2e, one deliberate bump, before the fix | Settled at `seen 9, included 8` |
 
-**Confirmed prototype bug:** `addFrameTx` calls `updateSeenStatus` for replacements as well, while ERC-8421's REPUTATION-040 says *"Admitting a replacement is not a new occurrence of `seen`."* The alt mempool authors confirmed this is a bug in the prototype, not ERC-8421 behaviour. It's what makes attack #2 cheap, and it would disappear with the fix. Our patch doesn't change it, so these measurements still apply to our local stack.
+**Confirmed prototype bug, fixed in our patch:** `addFrameTx` called `updateSeenStatus` for replacements as well, while ERC-8421's REPUTATION-040 says *"Admitting a replacement is not a new occurrence of `seen`."* The alt mempool authors confirmed this is a bug in the prototype, not ERC-8421 behaviour. **With our fix, the same 8-bump attack moves `seen` from 0 to 1**, not 8. The public gateway doesn't have this fix. See [upstream-pr.md](upstream-pr.md).
 
 ### How much it takes
 Calculated from the formulas above, **not run to completion**. Gas: a deposit is about 0.6–0.9M, a withdrawal about 0.9M.
 
 | Scenario | Seen per note | To throttle | To ban |
 |---|---|---|---|
-| **Bumps, today's default (no fee range)**, 0.5 ETH note, max fee starting at 8 wei | ~248 | 1 note | 3 notes |
-| Bumps, optional 1–8 gwei fee range on, non-mining node | 23 | 5 notes | 23 notes |
-| Bumps, optional 1–8 gwei fee range on, mining node (each note adds 1 `included`) | 23 | 8 notes | 39 notes |
-| **Across nodes only, once the replacement bug is fixed**, per non-mining node | 1 | 110 notes | 510 notes |
+| Bumps on a node with the bug (the public gateway), no fee range, 0.5 ETH note, max fee starting at 8 wei | ~248 | 1 note | 3 notes |
+| Bumps on a node with the bug, optional 1–8 gwei fee range on, non-mining node | 23 | 5 notes | 23 notes |
+| Bumps on a node with the bug, optional 1–8 gwei fee range on, mining node (each note adds 1 `included`) | 23 | 8 notes | 39 notes |
+| **With our fix: across nodes only**, per non-mining node | 1 | **110 notes** | **510 notes** |
 
 Since `seen` decays over 24 hours, an attacker has to sustain this. On a chain with real fees, 510 notes is about 800M gas. At the devnet's 7 wei base fee, the economic cost is close to nothing. **Today's mitigations raise the effort but don't make griefing uneconomic**, and honest `included` traffic only helps on nodes that observe it.
 
@@ -83,12 +84,12 @@ Off by default. Build the validator with `RELAYLESS_FEE_RANGE=<min wei>:<max wei
 | Base fee above the ceiling | Withdrawals still land | **All withdrawals stall until it falls** |
 | Fee policy | Set by the market | Fixed in the validator's code; changing it means a new pool |
 
-It's off because the bug it works around is confirmed as a prototype bug, while its cost is a liveness risk for every user. Turn it on only for a pool running against a node that still has the bug, and that can't tolerate griefing.
+It's off because our patch fixes the bug it works around, while its cost is a liveness risk for every user. Turn it on only for a pool running against a node that still has the bug, and that can't tolerate griefing.
 
 ### What can't be fixed from the pool
 The pool can't see the mempool, and validation can't read anything that would reveal a spray without losing concurrency. These need rule or node changes, proposed for the authors:
 
-1. **Fix the replacement bug (confirmed by the authors).** Removes attack #2.
+1. **Fix the replacement bug upstream.** Done in our patch, and it removes attack #2. [Write-up](upstream-pr.md).
 2. **Don't blame the sender when a pending tx is evicted because its own nonce key was consumed on chain.** The key's consumption proves the sender *did* get a transaction included. Decrement `seen` in that case, or credit `included`. This removes most of attack #1, in the spirit of REPUTATION-310.
 3. **Credit `included` across nodes.** A node that sees the pool's transactions mined could count them even when it didn't admit those particular ones, so `included` reflects the pool's real activity.
 4. **Consider a shared-sender allowance:** a pool's many independent users make it unlike a single misbehaving entity. Whether this is safe is an open question for the authors.
