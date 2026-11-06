@@ -14,7 +14,9 @@
     "deploy": "tsx scripts/deploy.ts",
     "e2e": "tsx scripts/e2e.ts",
     "web": "pnpm --filter @relayless/web dev",
-    "test:asp": "pnpm --filter @relayless/asp test"
+    "test:asp": "pnpm --filter @relayless/asp test",
+    "demo:asp": "scripts/demo-asp.sh",
+    "demo:seed": "tsx scripts/demo-seed.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

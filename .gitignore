@@ -20,3 +20,5 @@ apps/web/public/circuits/
 config/*.deployed.json
 packages/contracts/generated/
 .asp.log
+apps/web/public/demo-wallet.json
+.asp2.log
