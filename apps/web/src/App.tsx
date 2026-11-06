@@ -7,10 +7,15 @@ import { Meter, MeterPanel } from "./screens/Meter";
 import { Activity } from "./screens/Activity";
 import { Recover } from "./screens/Recover";
 import { Approve } from "./screens/Approve";
+import { Directory } from "./ens/Directory";
+import { Names } from "./ens/Names";
+import { ens } from "./ens/config";
+import { connectPool } from "./wallet";
+import { Problem, plainError } from "./ui";
 import { cfg } from "./config";
 import { eth } from "./ui";
 
-const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved"] as const;
+const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved", "ASPs", "Names"] as const;
 export type Tab = (typeof TABS)[number];
 
 export interface Session {
@@ -27,6 +32,7 @@ export function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [report, setReport] = useState<AnonymityReport | null>(null);
   const [tab, setTab] = useState<Tab>("Pay");
+  const [switchError, setSwitchError] = useState("");
 
   const refresh = useCallback(async () => {
     if (!conn) return;
@@ -50,12 +56,13 @@ export function App() {
         <span className="tnum text-slate">Private balance <strong className="text-ink">{eth(balance)} ETH</strong></span>
       </header>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 flex border-t-2 border-line bg-paper md:static md:mb-8 md:gap-1 md:border-none md:bg-transparent">
-        {TABS.filter((t) => t !== "Get approved" || cfg.aspUrl).map((t) => (
+        {TABS.filter((t) => (t !== "Get approved" || cfg.aspUrl) && ((t !== "ASPs" && t !== "Names") || ens)).map((t) => (
           <button key={t} onClick={() => setTab(t)} aria-current={t === tab ? "page" : undefined} className={`min-h-14 flex-1 px-1 text-sm font-bold md:min-h-10 md:flex-none md:rounded-lg md:px-4 md:text-base ${t === tab ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>
             {t}
           </button>
         ))}
       </nav>
+      {switchError && <Problem>{switchError}</Problem>}
       <div className={`grid gap-10 ${tab === "Privacy" ? "" : "md:grid-cols-[minmax(0,1fr)_320px]"}`}>
         <main>
           {tab === "Pay" && <Pay s={session} />}
@@ -64,6 +71,22 @@ export function App() {
           {tab === "Activity" && <Activity s={session} />}
           {tab === "Recover" && <Recover s={session} />}
           {tab === "Get approved" && <Approve s={session} />}
+          {tab === "ASPs" && ens && (
+            <Directory cfg={ens.cfg} devnetRpc={cfg.rpc} chainId={cfg.chainId} onUse={async (asp, check) => {
+              // Picking an ASP whose root didn't check out takes a second, deliberate step.
+              if (check.status !== "verified" && !window.confirm(`${asp.name} didn't pass the check against the pool's chain (${check.status}). Use it anyway?`)) return;
+              setSwitchError("");
+              try {
+                const rl = await connectPool(conn.signer, { pool: asp.pool!, endpoint: asp.endpoint });
+                await rl.unlock();
+                setConn({ rl, signer: conn.signer });
+                setTab("Pay");
+              } catch (e) {
+                setSwitchError(plainError(e));
+              }
+            }} />
+          )}
+          {tab === "Names" && ens && <Names cfg={ens.cfg} session={{ rl: conn.rl, signer: conn.signer, rpc: cfg.rpc, announcer: ens.announcer, refresh }} />}
         </main>
         {tab !== "Privacy" && <aside className="hidden md:block"><MeterPanel s={session} /></aside>}
       </div>

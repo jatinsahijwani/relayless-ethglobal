@@ -68,8 +68,11 @@ export async function browserSigner(): Promise<Signer> {
   };
 }
 
-export const connectPool = (signer: Signer) =>
-  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: cfg.aspUrl ? httpAssociationSet(cfg.aspUrl) : undefined });
+/** `choice` is an ASP picked from the ENS directory, which brings its own pool: each pool takes roots from one ASP. */
+export const connectPool = (signer: Signer, choice?: { pool: Address; endpoint: string | null }) => {
+  const aspUrl = choice ? choice.endpoint : cfg.aspUrl;
+  return Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: choice?.pool ?? cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: aspUrl ? httpAssociationSet(aspUrl) : undefined });
+};
 
 export const walletBalance = async (a: Address) => BigInt(await rpc(cfg.rpc, "eth_getBalance", [a, "latest"]));
 

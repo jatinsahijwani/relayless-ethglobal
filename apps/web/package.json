@@ -7,7 +7,9 @@
   "scripts": {
     "circuits": "mkdir -p public/circuits && cp ../../packages/circuits/build/withdraw_js/withdraw.wasm ../../packages/circuits/build/withdraw.zkey ../../packages/circuits/build/ragequit_js/ragequit.wasm ../../packages/circuits/build/ragequit.zkey public/circuits/",
     "dev": "pnpm circuits && vite",
-    "build": "pnpm circuits && vite build"
+    "build": "pnpm circuits && vite build",
+    "dev:ens": "vite --config vite.ens.config.ts --port 5198 --open /ens.html",
+    "build:ens": "vite build --config vite.ens.config.ts && mv dist-ens/ens.html dist-ens/index.html"
   },
   "dependencies": {
     "@relayless/sdk": "workspace:*",

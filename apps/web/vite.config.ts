@@ -7,10 +7,15 @@ const network = process.env.RELAYLESS_NETWORK ?? "local";
 const path = `../../config/${network}.deployed.json`;
 const cfg = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
 const isLocal = /127\.0\.0\.1|localhost/.test(cfg.rpc ?? "");
+// ENS screens stay hidden until the directory is deployed, so nothing changes for a stack without one.
+const readJson = (p: string) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null);
+const ensCfg = readJson("../../config/ens.sepolia.json");
+const announcer = readJson("../../config/local.announcer.deployed.json");
 
 export default defineConfig({
   plugins: [react()],
   define: {
+    __ENS__: JSON.stringify(ensCfg?.deployBlock ? { cfg: ensCfg, announcer: announcer ? { address: announcer.announcer, deployBlock: announcer.deployBlock } : null } : null),
     __RELAYLESS__: JSON.stringify({
       name: cfg.name ?? network,
       chainId: cfg.chainId,
