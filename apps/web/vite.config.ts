@@ -9,7 +9,7 @@ const cfg = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
 const isLocal = /127\.0\.0\.1|localhost/.test(cfg.rpc ?? "");
 // ENS screens stay hidden until the directory is deployed, so nothing changes for a stack without one.
 const readJson = (p: string) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null);
-const ensCfg = readJson("../../config/ens.sepolia.json");
+const ensCfg = readJson(process.env.ENS_CONFIG_PATH ?? "../../config/ens.sepolia.json");
 const announcer = readJson("../../config/local.announcer.deployed.json");
 
 export default defineConfig({

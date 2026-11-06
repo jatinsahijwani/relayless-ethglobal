@@ -8,8 +8,9 @@ import { dnsEncode } from "../../packages/sdk/src/ens.js";
 
 export const dnsName = dnsEncode;
 
-export const CONFIG_PATH = "config/ens.sepolia.json";
-export const STATE_PATH = ".relayless/ens-sepolia.json";
+// Overridable so everything can be rehearsed on a local fork of Sepolia before any real ETH is spent.
+export const CONFIG_PATH = process.env.ENS_CONFIG_PATH ?? "config/ens.sepolia.json";
+export const STATE_PATH = process.env.ENS_STATE_PATH ?? ".relayless/ens-sepolia.json";
 export const loadEnsConfig = () => JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
 export const saveEnsConfig = (c: unknown) => writeFileSync(CONFIG_PATH, `${JSON.stringify(c, null, 2)}\n`);
 

@@ -60,16 +60,15 @@ if (!parentRegistered) {
   if (!state.commit) {
     const secret = generatePrivateKey();
     const commitment = await read(c.ethRegistrar, REGISTRAR_ABI, "makeCommitment", [names.parentLabel, me, secret, r1, ZERO, duration, referrer]);
-    await write(`commit ${names.parent}`, c.ethRegistrar, REGISTRAR_ABI, "commit", [commitment]);
-    state.commit = { secret, at: Date.now() };
+    const receipt = await write(`commit ${names.parent}`, c.ethRegistrar, REGISTRAR_ABI, "commit", [commitment]);
+    state.commit = { secret, block: receipt.blockNumber.toString() };
     saveState(state);
   }
-  const age = Number(await read(c.ethRegistrar, REGISTRAR_ABI, "MIN_COMMITMENT_AGE"));
-  const waitMs = state.commit.at + (age + 15) * 1000 - Date.now();
-  if (waitMs > 0) {
-    console.log(`waiting ${Math.ceil(waitMs / 1000)} s for the commitment to age`);
-    await new Promise((res) => setTimeout(res, waitMs));
-  }
+  // The registrar compares block timestamps, so wait on the chain's clock and not this machine's.
+  const age = BigInt(await read(c.ethRegistrar, REGISTRAR_ABI, "MIN_COMMITMENT_AGE"));
+  const committedAt = (await pub.getBlock({ blockNumber: BigInt(state.commit.block) })).timestamp;
+  console.log(`waiting for the commitment to age ${age} s`);
+  while ((await pub.getBlock()).timestamp <= committedAt + age) await new Promise((res) => setTimeout(res, 3000));
   await write(`register ${names.parent}`, c.ethRegistrar, REGISTRAR_ABI, "register", [names.parentLabel, me, state.commit.secret, r1, ZERO, duration, c.mockUsdc, referrer]);
   delete state.commit;
   saveState(state);

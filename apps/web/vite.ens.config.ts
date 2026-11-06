@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const cfg = JSON.parse(readFileSync("../../config/ens.sepolia.json", "utf8"));
+const cfg = JSON.parse(readFileSync(process.env.ENS_CONFIG_PATH ?? "../../config/ens.sepolia.json", "utf8"));
 
 export default defineConfig({
   plugins: [react()],

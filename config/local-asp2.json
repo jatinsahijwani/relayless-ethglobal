@@ -1,0 +1,10 @@
+{
+  "name": "local-asp2",
+  "chainId": 1337,
+  "rpc": "http://127.0.0.1:18545",
+  "mempool": "http://127.0.0.1:14337/rpc/",
+  "stakingRegistry": "0xe8bdf6a3110973959f4b49d406f5d216ffa54b88",
+  "stakeEth": "0.012",
+  "reserveEth": "1",
+  "unstakeDelaySec": 86400
+}
