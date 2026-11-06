@@ -10,7 +10,7 @@ Local stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.pat
 | 2: product core | Done | Recovery, partial and split payments, 3+ pending at once, web app in phone-size Chrome |
 | 3: anonymity | Done except Anon-RPC | Meter, k-gate in circuit and UI, comparison view |
 | 4: polish | Mostly done | README, CROPS, threat model, demo script, license, one-command setup. Demo video and GIF not made |
-| 5: compliance | Partly done | Association set, public exit and World ID work locally, verified by World's **staging** service. Production not tested. ENSv2 not started |
+| 5: compliance | Partly done | Association set, public exit and World ID work locally, verified by World's **staging** service. Production not tested. ENSv2: see below |
 
 ## Test results
 Last full run: a fresh `git clone`, empty stack directory, `scripts/local-stack.sh`, then every suite on that chain.
@@ -43,6 +43,19 @@ Browser, real World proofs through the simulator, on the local chain:
 
 The app contacted no outside host until Verify was clicked. **Not tested:** production, or a real World App.
 
+## ENSv2
+Code complete on the `ensv2` branch. **Rehearsed on a fork of Sepolia, not yet deployed to Sepolia:** waiting for Sepolia ETH.
+
+| Check | Result |
+|---|---|
+| Foundry, on forked Sepolia with the deployed ENSv2 contracts | 16/16 |
+| SDK | 38/38 |
+| ASP server | 23/23 |
+| `scripts/ens/rehearse.sh`: full setup and `scripts/e2e-ens.ts`, on a Sepolia fork plus the live devnet | All passed |
+| Browser at 390px, on a Sepolia fork: browse ASPs, roles, derive, claim with an injected wallet | No errors, no overflow, no outside hosts |
+
+**Not tested yet:** real Sepolia, the live link, a real browser wallet (an injected test wallet stood in), the running World ID server publishing to ENS (the same code ran on the second ASP), and the private payment and scan through the browser screens (the e2e script covers those paths).
+
 ## Griefing, measured
 | Experiment | Result |
 |---|---|
@@ -66,7 +79,7 @@ Main e2e pool, settled: `seen 12, included 11`. **The gap of 1 is unexplained.**
 - Test a real browser wallet: only the test wallet has been exercised.
 - Time proving on a real phone.
 - Anon-RPC: docs list no devnet support, so this is probably a documented gap.
-- ENSv2 and pay-to-ENS: not started, on hold.
+- ENSv2: deploy to Sepolia, publish the live link, and revoke the last parent role.
 
 ## Known issues
 - **ethrex loses block numbers.** On 2 of 2 fresh chains, blocks from about 149 lost their number lookup, about 15 minutes after genesis. Cause unknown. The SDK reads around it and fails loudly if a gap hid pool data. Written up in `docs/upstream-pr.md`.

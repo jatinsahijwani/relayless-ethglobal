@@ -12,7 +12,8 @@ Privacy pools with no relayer have been prototyped. This is the layer that makes
 - **Withdrawals don't wait for each other.** Each one has its own nullifier as its nonce key, and validation reads no storage. So one pool can serve many users at the same moment.
 - **See how hidden you are.** Every deposit is drawn as a dot, sized by how suspicious it looks from outside. You get min-entropy and Shannon scores, plus advice you can act on: wait, split, or change the amount. It's an explicit model, not a guarantee.
 - **Enforce it if you want.** Require at least *k* notes after yours, checked inside the proof.
-- **Compliance path.** An optional association set: only approved deposits withdraw privately, and anyone else can always exit publicly to the wallet that deposited. *The set, the exit and World ID work locally against World's staging service. ENSv2 isn't started.*
+- **Compliance path.** An optional association set: only approved deposits withdraw privately, and anyone else can always exit publicly to the wallet that deposited. *The set, the exit and World ID work locally against World's staging service.*
+- **ENS as the directory.** Find association-set providers by name, and check each one's root against the pool's chain. Pay `alice.relayless.eth` twice and nobody can link the payments. See [ENSv2](#ensv2).
 
 ## Findings for the alt mempool
 Building a pool where every user shares one sender surfaced these, each reproducible:
@@ -100,6 +101,7 @@ CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|r
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.
 - **O:** GPL-3.0, because circomlib's GPL-3.0 circuits are compiled into the project (see [NOTICE.md](NOTICE.md)). Builds and runs from this repo, using a patched third-party sidecar until the public gateway supports it.
 - **P:** The RPC and mempool node see your IP, and everything on-chain is public: deposits, amounts, recipients, and *k*. Reads fetch all deposits, so they don't reveal which are yours. No trackers or analytics: a full browser run contacted no outside host, and fonts are self-hosted. On a pool with an association set, choosing to verify contacts World, and the ASP links a World ID nullifier to a depositor address, which is already public. Anon-RPC isn't integrated, as its docs list no devnet support.
+  **ENS lookups:** we run no server here, so we can't see them. The Sepolia RPC can: it sees your IP and every name you resolve, so looking up `alice.relayless.eth` tells it you're interested in that name, though not whether you paid. It doesn't see the one-time address, which is derived on your device, or anything on the pool's chain. Scanning fetches every announcement and tests them locally, so the node can't tell which are yours, and the viewing key never leaves your device. To avoid trusting a public RPC, set your own in `config/ens.sepolia.json`. CCIP-Read is off, so no gateway sees lookups either.
 - **S:** Keys stay on your device and derive from a wallet signature held in memory. The test wallet keeps a throwaway key in browser storage, so it's for devnets only. Trust assumptions: the circuits, the validator (neither audited), and a Groth16 setup that is **devnet-grade**, since anyone with its one local contribution could forge proofs.
 
 ## Threat model
@@ -111,6 +113,14 @@ CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|r
 - A small pool. With few deposits, you're easy to pick out.
 - A note owner griefing the pool's reputation. This is bounded, not solved.
 - Whoever holds the setup's toxic waste.
+- The Sepolia RPC learning which names you look up.
+- Timing between an announcement and its payment, which sit close together on-chain. This doesn't identify the payer, but it does pair the two transactions.
+- Someone who holds a recipient's viewing key, who can see all of that recipient's payments but can't spend them.
+
+**What an ASP curator can and can't do:**
+- **Can:** add ASPs to the directory, stop renewing one so it drops out when its name expires, and re-register a label after that, which clients flag because the operator no longer matches the pool.
+- **Can't:** edit an ASP's records, repoint its resolver, remove it early, touch a receive name, or move anyone's money. Public exit never depends on the directory.
+- **Until the last role is revoked:** whoever holds the subregistry role on `relayless.eth` can replace everything beneath it. See [ENSv2](#ensv2) for its current state.
 
 ## Limitations
 - **Runs on a patched local sidecar.** The public gateway needs per-entity budgets and precompiles allowed. The same transaction simulates successfully against the public chain, and its gateway refuses it.
@@ -118,7 +128,8 @@ CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|r
 - **Not audited.** Groth16 isn't post-quantum. Trusted setup is devnet-grade.
 - **Withdrawals need the pool to be staked** under the ERC draft's budgets, and the stake can't be withdrawn.
 - **A banned pool blocks everyone at that node**, including public exits, until `seen` decays or you use another node.
-- **World ID is tested on staging only,** with World's simulator. Production, with a real World App, isn't tested. ENSv2, pay-to-ENS and Anon-RPC aren't integrated.
+- **World ID is tested on staging only,** with World's simulator. Production, with a real World App, isn't tested. Anon-RPC isn't integrated.
+- **ENS and the pool are on different chains,** so the static demo can't run the cross-check or a payment, and says so. A stealth payment costs about twice the gas of a normal one, because of its announcement.
 - Proving hasn't been timed on a phone.
 
 ## Options

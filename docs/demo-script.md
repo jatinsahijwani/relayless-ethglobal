@@ -47,3 +47,20 @@ Before you start: stack running, some deposits already in the pool from other wa
 - **Say it's the local stack:** "This runs on a local devnet with a small sidecar patch, because the public gateway doesn't yet allow verification over 100k."
 - Don't say "anonymous" without "the model estimates". The node you submit to sees your IP.
 - Compliance is only claimable up to what's built: association set and public exit work locally. **Don't claim World ID or ENS until they're integrated.**
+
+## ENS segment (30 s)
+Before you start: the local app is on the **ENS** tab with a test wallet that has private money, `alice.relayless.eth` is claimed, and the recipient's wallet is ready to scan.
+
+*Show **ASPs**. Point at the green check on `world.asp.relayless.eth`, then the warning on `forged-demo`.* (10 s)
+
+> "These are privacy pool approvers, found by name. There's no list in the app: it reads ENSv2 subnames. Each root is checked against the pool's own chain, so this one passes, and this deliberately wrong one gets a warning. The operator's key can edit only this root and policy. Not even the parent name can change them."
+
+*Go to **Names**. Look up `alice.relayless.eth`. Pay it. Pay it again. Two different addresses appear.* (12 s, cut the waiting)
+
+> "Pay a name, not an address. The name holds a stealth record, so each payment goes to a new one-time address, paid from the pool. Same name, two addresses, and nothing on-chain connects them."
+
+*Switch to the recipient's wallet. Click **Find my payments**. Both appear.* (8 s)
+
+> "Only Alice's viewing key can find them. Her scan fetches every announcement, so even the node can't tell which are hers."
+
+If you're showing the public link instead, say that payments run on the local devnet: the page says so too.

@@ -2,6 +2,36 @@
 
 Design choices and why. Newest context first where it matters.
 
+## ENS is the directory, and the pool's chain is the truth
+ENS says which ASPs exist and what they claim. It can't approve anyone: the circuit checks membership against a root on the pool's chain. So a client tests each ENS root two ways, with no contract change and no server: the pool's immutable `ASP_SOURCE_ID` must match the named operator, and the recent-root predeploy must hold that root at that slot. The predeploy has no getter, but its storage layout is deterministic, so one `eth_getStorageAt` is enough. Measured on the running devnet: the real root matches, and a forged root or wrong slot fails.
+
+## One pool per ASP
+`ASP_SOURCE_ID` is immutable, and changing it means changing the validator's assumptions. So ENS gives discovery across many ASPs, and each pool still has exactly one. Choosing an ASP means choosing its pool. **Cost:** liquidity splits across pools, which shrinks each anonymity set. A pool taking several ASPs would fix that, and is a contract change we didn't make.
+
+## ASP names expire, can't move, and can't be pulled early
+ASP names last a year and the curator renews them. The curator holds only `REGISTRAR` and `RENEW`, so it can't edit a record, swap a resolver or unregister a name.
+
+**Removing a bad ASP means not renewing it.** That's slow and visible, and we chose it over instant removal. A bad ASP can only over-approve or withhold: it can't take money, and the public exit stays open. Instant revocation would give the curator a censorship switch over every ASP to guard against a harm that's already bounded.
+
+**What the curator keeps:** after a name expires, it could register the label to someone else. Clients catch this because the new operator won't match the pool's `ASP_SOURCE_ID`. Anyone can also run their own directory, since the parent name is just config.
+
+ASP names are non-transferable, so a provider's reputation can't be sold with the name. The owner can still repoint its own resolver, which is how it rotates a compromised operator key.
+
+## The ASP owner and operator are different keys
+The operator is a hot key on a server, so its role covers only `asp.root`, `asp.slot` and `asp.policy`. A leaked operator key can publish a wrong root, which the cross-check catches, but it can't change the pool, operator or endpoint records, or the name.
+
+## Receive names are forever names
+They never expire, and nobody holds `UNREGISTER`, including the owner, so a name can't be released and reclaimed by someone else. **The limit:** "forever" holds inside the registry. A name stops resolving if `relayless.eth` expires, and whoever holds the subregistry role on `relayless.eth` can replace the registry beneath it. Anyone can renew through the registrar, and the role can be revoked. A Foundry test shows both limits instead of hiding them.
+
+## Each person gets their own resolver
+Resolver roles cover every name on an instance, not one name. On a shared resolver, the app key's role would reach everyone's stealth record.
+
+## Announcements come from a fresh wallet
+The validator pins each withdrawal's frames, so a payment can't carry an announcement without a validator change. The payer's wallet can't send it either, because that links the payer. So a second withdrawal funds a new throwaway wallet, which announces first and then the payment goes out. **Costs:** about twice the gas, not atomic, and a little dust left in the announcer. Announcing first means a failure can't strand money where it can't be found. A wallet is never reused, because a shared one links its payments.
+
+## Listing names from logs
+ENSv2 has no enumeration function, and wildcard resolution can't list what exists. So the client reads `LabelRegistered` directly from a public RPC. **Cost:** it depends on an RPC that keeps logs and allows browser access. A public one rate-limited us in testing, so reads back off and fall through to a second endpoint in config.
+
 ## Local stack with a sidecar patch
 The public gateway rejects this tx twice: a 100k cap that ignores stake, and `COD-010` treating precompiles as un-deployed (`docs/repro-gateway.md`). We use local ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. **The alt mempool authors confirmed a local sidecar is fine for judging.** RPC URLs live only in config, so moving later is a config change.
 

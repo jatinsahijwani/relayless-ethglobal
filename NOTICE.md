@@ -22,6 +22,12 @@ The pool's label scheme and public-exit design also follow theirs.
 - **poseidon-solidity**, **poseidon-lite** (MIT): Poseidon hashing.
 - **snarkjs** (GPL-3.0): the prover, used as a runtime dependency.
 - **viem** (MIT).
+- **@scopelift/stealth-address-sdk** (MIT): ERC-5564 scheme 1 derivation, checking and key recovery. Only its crypto functions are imported, and it's used as a dependency, not copied.
+- **@noble/secp256k1**, **@noble/hashes** (MIT): curve operations and key derivation.
+
+## Standards and interfaces
+- `packages/ens/src/ERC5564Announcer.sol` implements the interface from [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) (CC0).
+- `packages/ens` declares minimal interfaces for ENS [contracts-v2](https://github.com/ensdomains/contracts-v2) (MIT) and calls the contracts deployed on Sepolia. No ENS code is copied.
 
 ## Changes to third-party software
 `patches/sidecar-budget-010.patch` modifies `forshtat/mempool-workshop-sidecar` (MIT). It isn't part of this project's own code.
