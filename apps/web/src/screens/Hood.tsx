@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatEther, parseEther, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import type { MempoolComparison } from "@relayless/sdk";
+import type { MempoolComparison, WithdrawHandle } from "@relayless/sdk";
+import { rpc } from "@relayless/sdk/chain";
 import type { Session } from "../App";
-import { named } from "../demo";
+import { cfg } from "../config";
+import { demo, named } from "../demo";
 import { Button, Problem, Screen, plainError } from "../ui";
 import { watchProving } from "../wallet";
 
 const num = (n: bigint | number | null) => (n === null ? "unknown" : Number(n).toLocaleString("en"));
+/** The sidecar keeps resolved entries listed for a long time, so only recent ones are news. */
+const RECENT_MS = 5 * 60 * 1000;
 const someone = (): Address => privateKeyToAccount(generatePrivateKey()).address;
 
 export function useProvingClock() {
@@ -90,10 +94,95 @@ export function CompareMempools({ s }: { s: Session }) {
   );
 }
 
+interface Row { hash: string; nonceKey: string; status: string; firstSeen: number; block?: number }
+
+export function LiveMempool({ s }: { s: Session }) {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [peak, setPeak] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const clock = useProvingClock();
+  const known = useRef(new Map<string, Row>());
+  const pool = s.rl.poolAddress.toLowerCase();
+
+  useEffect(() => {
+    let on = true;
+    const tick = async () => {
+      const list = await rpc(cfg.mempool, "skandha_explorer_listTransactions", [{ limit: 50 }]).catch(() => null);
+      if (!on) return;
+      if (list) {
+        const pendingNow = new Set<string>();
+        for (const t of list.items as any[]) {
+          if (t.sender?.toLowerCase() !== pool) continue;
+          const old = known.current.get(t.txHash);
+          const recent = (t.submittedTime ?? t.lastUpdatedTime) > Date.now() - RECENT_MS;
+          if (recent && /^(New|Pending|Submitted|OnChain)$/i.test(t.status)) pendingNow.add(t.txHash);
+          if (!old && pendingNow.has(t.txHash)) known.current.set(t.txHash, { hash: t.txHash, nonceKey: t.nonceKeys?.[0] ?? "", status: t.status, firstSeen: Date.now() });
+          else if (old && !old.block) old.status = t.status;
+        }
+        await Promise.all([...known.current.values()].filter((r) => !r.block).map(async (r) => {
+          const receipt = await rpc(cfg.rpc, "eth_getTransactionReceipt", [r.hash]).catch(() => null);
+          if (receipt) r.block = Number(receipt.blockNumber);
+        }));
+        const all = [...known.current.values()].sort((a, b) => b.firstSeen - a.firstSeen).slice(0, 8);
+        const pending = all.filter((r) => !r.block).length;
+        if (on) { setRows(all); setPeak((p) => Math.max(p, pending)); }
+      }
+      if (on) setTimeout(tick, 700);
+    };
+    tick();
+    return () => { on = false; };
+  }, [pool]);
+
+  const payThree = async () => {
+    setSending(true); setError(""); setPeak(0);
+    try {
+      const handles: WithdrawHandle[] = await s.rl.payMany([0, 1, 2].map(() => ({ to: someone(), amount: parseEther("0.01") })));
+      await Promise.all(handles.map((h) => h.wait()));
+      await s.refresh();
+    } catch (e) {
+      setError(plainError(e));
+    } finally {
+      setSending(false);
+    }
+  };
+  const free = s.notes.filter((n) => !n.spent && n.value >= parseEther("0.01")).length;
+  const pendingCount = rows.filter((r) => !r.block).length;
+
+  return (
+    <section className="mb-10">
+      <h2 className="mb-1 text-2xl font-bold">Live mempool</h2>
+      <p className="mb-3 max-w-2xl">Pending withdrawals from the pool, read from the sidecar as they arrive. Every user shares one sender, and each has its own nullifier as its nonce key, so they don't wait for each other.</p>
+      {demo && (
+        <div className="mb-3">
+          <Button disabled={sending || free < 3} onClick={payThree}>{sending ? (clock.proving ? `Proving… ${clock.seconds} s` : "Waiting for a block…") : "Pay 3 people at once"}</Button>
+          {free < 3 && !sending && <p className="mt-2 text-sm text-slate">This needs 3 separate notes, and this wallet has {free}. Run <code>pnpm demo:reset</code>.</p>}
+        </div>
+      )}
+      {error && <Problem>{error}</Problem>}
+      <p className="tnum mb-2 font-bold" aria-live="polite" data-testid="pending-count">{pendingCount} pending now{peak > 1 ? `, ${peak} at once at the peak` : ""}</p>
+      {rows.length === 0 ? (
+        <p className="text-slate">Nothing in the last 5 minutes. Make a payment and it appears here.</p>
+      ) : (
+        <ul className="max-w-2xl space-y-1" data-testid="mempool-rows">
+          {rows.map((r) => (
+            <li key={r.hash} className="tnum flex flex-wrap items-center gap-x-3 rounded bg-paper px-3 py-2 text-sm">
+              <span aria-hidden="true" className={`inline-block h-3 w-3 rounded-full ${r.block ? "bg-pool" : "bg-flare"}`} />
+              <span className="font-mono">nonce key {r.nonceKey.slice(0, 8)}…{r.nonceKey.slice(-4)}</span>
+              <span className="ml-auto font-bold">{r.block ? `confirmed in block ${r.block}` : "pending"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function Hood({ s }: { s: Session }) {
   return (
     <Screen title="Under the hood">
       <CompareMempools s={s} />
+      <LiveMempool s={s} />
     </Screen>
   );
 }
