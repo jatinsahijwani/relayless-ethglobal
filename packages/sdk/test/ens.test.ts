@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ANNOUNCER_ABI, announceCall, aspSourceOf, crossCheckRoot, decodeRoles, deriveStealthPayment, dnsEncode, isMetaAddress, metaAddressOf, publishRootCall, recentRootKey, recentRootValue, REGISTRY_ROLES, RESOLVER_ROLES, RECENT_ROOT_WINDOW, scanAnnouncements, stealthAccount, stealthKeysFromSignature, stealthPrivateKey, type EnsConfig } from "../src/index.js";
+import { ANNOUNCER_ABI, announceCall, ensTransport, aspSourceOf, crossCheckRoot, decodeRoles, deriveStealthPayment, dnsEncode, isMetaAddress, metaAddressOf, publishRootCall, recentRootKey, recentRootValue, REGISTRY_ROLES, RESOLVER_ROLES, RECENT_ROOT_WINDOW, scanAnnouncements, stealthAccount, stealthKeysFromSignature, stealthPrivateKey, type EnsConfig } from "../src/index.js";
 
 const sig = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(65)}` as Hex;
 const alice = stealthKeysFromSignature(sig(1));
@@ -216,4 +216,60 @@ test("publishing writes root and slot in one call", () => {
   const { args } = decodeFunctionData({ abi, data: publishRootCall(cfg, "world.asp.relayless.eth", ROOT, 7n) });
   const writes = (args![0] as Hex[]).map((c) => decodeFunctionData({ abi, data: c }).args);
   assert.deepEqual(writes, [[dnsEncode("world.asp.relayless.eth"), "asp.root", ROOT], [dnsEncode("world.asp.relayless.eth"), "asp.slot", "7"]]);
+});
+
+// ---- Transport ----
+
+const CFG = { rpc: "https://first.example/rpc", rpcFallbacks: ["https://second.example/rpc"] };
+const rpcReply = (id: number) => new Response(JSON.stringify({ jsonrpc: "2.0", id, result: "0x10" }), { headers: { "content-type": "application/json" } });
+const realFetch = globalThis.fetch;
+const blockNumber = (opts: Parameters<typeof ensTransport>[1]) => ensTransport(CFG, opts)({ retryCount: 0 } as any).request({ method: "eth_blockNumber" });
+
+test("transport: a custom fetch carries every request, and the normal fetch sees none", async (t) => {
+  t.after(() => { globalThis.fetch = realFetch; });
+  let direct = 0;
+  globalThis.fetch = (async () => { direct++; throw new Error("direct"); }) as typeof fetch;
+  const urls: string[] = [];
+  const custom = (async (url: string, init: RequestInit) => { urls.push(String(url)); return rpcReply(JSON.parse(String(init.body)).id); }) as typeof fetch;
+  assert.equal(await blockNumber({ fetch: custom, retryCount: 0 }), "0x10");
+  assert.deepEqual(urls, [CFG.rpc]);
+  assert.equal(direct, 0);
+});
+
+test("transport: when the custom fetch fails everywhere, the request fails rather than going direct", async (t) => {
+  t.after(() => { globalThis.fetch = realFetch; });
+  let direct = 0;
+  globalThis.fetch = (async () => { direct++; return rpcReply(1); }) as typeof fetch;
+  const urls: string[] = [];
+  const custom = (async (url: string) => { urls.push(String(url)); throw new Error("mixnet down"); }) as typeof fetch;
+  await assert.rejects(blockNumber({ fetch: custom, retryCount: 0 }));
+  assert.deepEqual(urls, [CFG.rpc, CFG.rpcFallbacks[0]]);
+  assert.equal(direct, 0);
+});
+
+test("transport: with no options, requests use the normal fetch", async (t) => {
+  t.after(() => { globalThis.fetch = realFetch; });
+  const urls: string[] = [];
+  globalThis.fetch = (async (url: string, init: RequestInit) => { urls.push(String(url)); return rpcReply(JSON.parse(String(init.body)).id); }) as typeof fetch;
+  assert.equal(await blockNumber({}), "0x10");
+  assert.deepEqual(urls, [CFG.rpc]);
+});
+
+test("transport: batching sends concurrent requests as one", async () => {
+  let posts = 0;
+  const custom = (async (_url: string, init: RequestInit) => {
+    posts++;
+    const body = JSON.parse(String(init.body));
+    return new Response(JSON.stringify(body.map((b: any) => ({ jsonrpc: "2.0", id: b.id, result: "0x10" }))), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const t = ensTransport({ rpc: CFG.rpc }, { fetch: custom, batch: true, retryCount: 0 })({ retryCount: 0 } as any);
+  await Promise.all([t.request({ method: "eth_blockNumber" }), t.request({ method: "eth_chainId" }), t.request({ method: "eth_gasPrice" })]);
+  assert.equal(posts, 1);
+});
+
+test("transport: a route can skip the fallback list", async () => {
+  const urls: string[] = [];
+  const custom = (async (url: string) => { urls.push(String(url)); throw new Error("down"); }) as typeof fetch;
+  await assert.rejects(blockNumber({ fetch: custom, retryCount: 0, noFallbacks: true }));
+  assert.deepEqual(urls, [CFG.rpc]);
 });

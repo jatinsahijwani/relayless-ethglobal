@@ -179,15 +179,30 @@ async function pool<T, R>(items: T[], limit: number, work: (t: T) => Promise<R>)
   return out;
 }
 
-/** Public RPCs differ in what they refuse: the first one we read from also rejects real transactions, so a send falls through too. */
-export function ensTransport(cfg: Pick<EnsConfig, "rpc" | "rpcFallbacks">) {
-  const first = http(cfg.rpc, { retryCount: 4, retryDelay: 600 });
-  return cfg.rpcFallbacks?.length ? fallback([first, ...cfg.rpcFallbacks.map((u) => http(u, { retryCount: 2, retryDelay: 600 }))]) : first;
+/** How to reach the public Sepolia RPCs. The default is the normal fetch. Nothing here touches the pool's chain. */
+export interface EnsTransportOptions {
+  /** Replaces fetch for every Sepolia request, for example with a mixnet or a proxy. A failure is never retried with the normal fetch. */
+  fetch?: typeof globalThis.fetch;
+  /** Per-request limit in ms, or 0 for none. Set this when the fetch above is slower than a direct connection, or does its own timing. */
+  timeoutMs?: number;
+  /** Sends concurrent requests as JSON-RPC batches. Worth it when each round trip is expensive. */
+  batch?: boolean | { batchSize?: number; wait?: number };
+  /** Use only `rpc`, for a route that can't reach the others. */
+  noFallbacks?: boolean;
+  /** Tries after the first, per endpoint and across the fallback list, overriding the defaults. */
+  retryCount?: number;
 }
 
-export function createEnsReader(cfg: EnsConfig) {
+/** Public RPCs differ in what they refuse: the first one we read from also rejects real transactions, so a send falls through too. */
+export function ensTransport(cfg: Pick<EnsConfig, "rpc" | "rpcFallbacks">, opts: EnsTransportOptions = {}) {
+  const shared = { fetchFn: opts.fetch, timeout: opts.timeoutMs, batch: opts.batch, retryDelay: 600 };
+  const first = http(cfg.rpc, { ...shared, retryCount: opts.retryCount ?? 4 });
+  return cfg.rpcFallbacks?.length && !opts.noFallbacks ? fallback([first, ...cfg.rpcFallbacks.map((u) => http(u, { ...shared, retryCount: opts.retryCount ?? 2 }))], opts.retryCount === undefined ? {} : { retryCount: opts.retryCount }) : first;
+}
+
+export function createEnsReader(cfg: EnsConfig, transport: EnsTransportOptions = {}) {
   // Off on purpose: our names resolve on-chain, and a CCIP gateway would be one more party seeing each lookup.
-  const client = createPublicClient({ chain: sepolia, transport: ensTransport(cfg), ccipRead: false });
+  const client = createPublicClient({ chain: sepolia, transport: ensTransport(cfg, transport), ccipRead: false });
   const ur = cfg.contracts.universalResolver;
   const read = (address: Address, functionName: any, args: any[] = []) => client.readContract({ address, abi: REGISTRY_ABI, functionName, args } as any) as Promise<any>;
   const text = (name: string, key: string) => client.getEnsText({ name, key, universalResolverAddress: ur }).catch(() => null);
@@ -316,7 +331,7 @@ const FULL_ROLES = BigInt(`0x${"1".repeat(64)}`);
  * The name is claimed last so it's never live without its record. Each person gets a resolver of their own, because a
  * resolver role covers every name on that instance.
  */
-export async function claimReceiveName(cfg: EnsConfig, sender: EnsSender, opts: { label: string; metaAddress: string; appAddress: Address }): Promise<{ name: string; resolver: Address }> {
+export async function claimReceiveName(cfg: EnsConfig, sender: EnsSender, opts: { label: string; metaAddress: string; appAddress: Address; transport?: EnsTransportOptions }): Promise<{ name: string; resolver: Address }> {
   if (!cfg.claimer) throw new Error("the name claimer isn't deployed yet");
   const label = normalize(opts.label);
   if (label.includes(".")) throw new Error("use a single name with no dots");
@@ -324,7 +339,7 @@ export async function claimReceiveName(cfg: EnsConfig, sender: EnsSender, opts: 
   // Free, and before anything is spent. The name is minted to this account, so a smart account that can't receive
   // ERC-1155 tokens would otherwise pay for two transactions and then fail on the third.
   try {
-    await createEnsReader(cfg).client.call({ account: sender.address, to: cfg.claimer, data: encodeFunctionData({ abi: CLAIMER_ABI, functionName: "claim", args: [label, ZERO] }) });
+    await createEnsReader(cfg, opts.transport).client.call({ account: sender.address, to: cfg.claimer, data: encodeFunctionData({ abi: CLAIMER_ABI, functionName: "claim", args: [label, ZERO] }) });
   } catch {
     throw new Error("This wallet can't claim that name. It may already be taken, or this may be a smart account that can't receive the name. Nothing was spent. Try another name or wallet.");
   }
