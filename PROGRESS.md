@@ -46,9 +46,9 @@ With the optional fee-bump limit on, `scripts/e2e.ts` last passed 30/30, on an e
 | Landing and `/findings` at both widths | Worked, no console errors, no overflow |
 | Live link, 390px, Nym off: directory, `alice.relayless.eth`, derive twice | Directory in 6 s, lookup in 1 s. Console shows the public RPC's 429s, which retry |
 | Live link, 390px, Nym on: same steps | Directory in 59 s, lookup in 2 s. No browser request to a Sepolia RPC, no console errors |
-| `/findings` on a Vercel preview of the new build | Worked. **The live link needs a redeploy to have it** |
+| Live link, new build, 1280×720 and 390px: `/findings` directly and from the landing page | Worked. No console errors or failed requests on `/findings`, no overflow. The landing page shows the same 429s, which retry |
 
-These are headless Chromium runs on a laptop.
+These are headless Chromium runs on a laptop. The two Nym off and Nym on runs above were on the previous live build and weren't repeated on this one.
 
 ## World ID against the real staging service
 Browser, real World proofs through the simulator, on the local chain:
