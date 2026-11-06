@@ -1,10 +1,10 @@
 // Shared by the Sepolia scripts. Nothing here touches the local chain.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { createPublicClient, createWalletClient, encodeFunctionData, encodeAbiParameters, http, keccak256, namehash, parseAbi, parseEther, parseEventLogs, stringToHex, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, encodeFunctionData, encodeAbiParameters, keccak256, namehash, parseAbi, parseEther, parseEventLogs, stringToHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { dnsEncode } from "../../packages/sdk/src/ens.js";
+import { dnsEncode, ensTransport } from "../../packages/sdk/src/ens.js";
 
 export const dnsName = dnsEncode;
 
@@ -57,7 +57,7 @@ export const REGISTRAR_ABI = parseAbi([
 export const ERC20_ABI = parseAbi(["function mint(address to, uint256 amount)", "function approve(address spender, uint256 amount) returns (bool)", "function balanceOf(address) view returns (uint256)"]);
 
 export function sepoliaClient(cfg: any) {
-  return createPublicClient({ chain: sepolia, transport: http(cfg.rpc) });
+  return createPublicClient({ chain: sepolia, transport: ensTransport(cfg) });
 }
 
 export function requireKey(name: string): Hex {
@@ -69,7 +69,7 @@ export function requireKey(name: string): Hex {
 export function actor(cfg: any, key: Hex) {
   const account = privateKeyToAccount(key);
   const pub = sepoliaClient(cfg);
-  const wallet = createWalletClient({ account, chain: sepolia, transport: http(cfg.rpc) });
+  const wallet = createWalletClient({ account, chain: sepolia, transport: ensTransport(cfg) });
   /** Simulates first, so a call that would fail costs nothing. */
   const write = async (label: string, address: Address, abi: any, functionName: string, args: unknown[]) => {
     const { request } = await pub.simulateContract({ account, address, abi, functionName, args } as any);

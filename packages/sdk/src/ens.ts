@@ -179,10 +179,15 @@ async function pool<T, R>(items: T[], limit: number, work: (t: T) => Promise<R>)
   return out;
 }
 
+/** Public RPCs differ in what they refuse: the first one we read from also rejects real transactions, so a send falls through too. */
+export function ensTransport(cfg: Pick<EnsConfig, "rpc" | "rpcFallbacks">) {
+  const first = http(cfg.rpc, { retryCount: 4, retryDelay: 600 });
+  return cfg.rpcFallbacks?.length ? fallback([first, ...cfg.rpcFallbacks.map((u) => http(u, { retryCount: 2, retryDelay: 600 }))]) : first;
+}
+
 export function createEnsReader(cfg: EnsConfig) {
   // Off on purpose: our names resolve on-chain, and a CCIP gateway would be one more party seeing each lookup.
-  const transport = http(cfg.rpc, { retryCount: 4, retryDelay: 600 });
-  const client = createPublicClient({ chain: sepolia, transport: cfg.rpcFallbacks?.length ? fallback([transport, ...cfg.rpcFallbacks.map((u) => http(u, { retryCount: 2, retryDelay: 600 }))]) : transport, ccipRead: false });
+  const client = createPublicClient({ chain: sepolia, transport: ensTransport(cfg), ccipRead: false });
   const ur = cfg.contracts.universalResolver;
   const read = (address: Address, functionName: any, args: any[] = []) => client.readContract({ address, abi: REGISTRY_ABI, functionName, args } as any) as Promise<any>;
   const text = (name: string, key: string) => client.getEnsText({ name, key, universalResolverAddress: ur }).catch(() => null);

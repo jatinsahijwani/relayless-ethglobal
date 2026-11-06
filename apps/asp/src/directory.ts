@@ -3,10 +3,10 @@
 // ENS is a directory, not part of approving anyone: the pool's chain already has the root by the time this runs. So a
 // Sepolia outage must never delay or fail a join. Publishing runs in the background, one at a time, and if several
 // roots arrive while one is in flight only the newest goes out.
-import { createPublicClient, createWalletClient, http, parseAbi, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, parseAbi, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { publishRootCall, type EnsConfig } from "@relayless/sdk/ens";
+import { ensTransport, publishRootCall, type EnsConfig } from "@relayless/sdk/ens";
 
 export interface RootRef {
   root: Hex;
@@ -57,8 +57,8 @@ const ZERO: Address = "0x0000000000000000000000000000000000000000";
  */
 export function liveDirectory(cfg: EnsConfig, label: string, operatorKey: Hex): PublishRoot {
   const account = privateKeyToAccount(operatorKey);
-  const pub = createPublicClient({ chain: sepolia, transport: http(cfg.rpc), ccipRead: false });
-  const wallet = createWalletClient({ account, chain: sepolia, transport: http(cfg.rpc) });
+  const pub = createPublicClient({ chain: sepolia, transport: ensTransport(cfg), ccipRead: false });
+  const wallet = createWalletClient({ account, chain: sepolia, transport: ensTransport(cfg) });
   const name = `${label}.${cfg.names.directory}`;
   const sub = (address: Address, l: string) => pub.readContract({ address, abi: REGISTRY, functionName: "getSubregistry", args: [l] });
 
