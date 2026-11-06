@@ -154,9 +154,9 @@ Both registries report `isEmancipated() == true`. Protocol addresses are in [con
 - **P:** The RPC and mempool node see your IP, and everything on-chain is public: deposits, amounts, recipients, and *k*. Reads fetch all deposits, so they don't reveal which are yours. No trackers or analytics: a full browser run contacted no outside host, and fonts are self-hosted. On a pool with an association set, choosing to verify contacts World, and the ASP links a World ID nullifier to a depositor address, which is already public. Anon-RPC isn't integrated, as its docs list no devnet support.
   **ENS lookups:** we run no server here, so we can't see them. The Sepolia RPC can: it sees your IP and every name you resolve, so looking up `alice.relayless.eth` tells it you're interested in that name, though not whether you paid. It doesn't see the one-time address, which is derived on your device, or anything on the pool's chain. Scanning fetches every announcement and tests them locally, so the node can't tell which are yours, and the viewing key never leaves your device. To avoid trusting a public RPC, set your own in `config/ens.sepolia.json`. CCIP-Read is off, so no gateway sees lookups either.
   **Nym mixnet (optional, off by default):** "Route through Nym mixnet" on the ENS screens sends those Sepolia reads through the mixnet.
-  - **What it hides:** your IP from the Sepolia RPC, which still sees every name you look up, but from a shared exit. The exit sees which RPC is being contacted, but not your IP or the query.
+  - **What it hides:** your IP from the Sepolia RPC, and so the link between you and the names you look up. The RPC still sees every name looked up, but from a shared exit, so it can't tell they're yours. The exit sees which RPC is being contacted, but not your IP or the query.
   - **What it doesn't hide:** your network, the entry gateway and Nym's validator API see your IP and that you use Nym. Vercel sees your IP when serving the page. Reads made before you turn it on have already gone directly, unless you open the page with `?nym=1`.
-  - **What it doesn't cover:** only the ENS reads. Pool transactions and reads still go directly to the local node, which sees your IP, because the mixnet can't reach localhost. A claim's transactions go through your wallet's own RPC.
+  - **What it doesn't cover:** only the ENS reads. **Transaction submission still goes directly to the mempool node**, which sees your IP, and so do pool reads, because the mixnet can't reach localhost. A claim's transactions go through your wallet's own RPC.
   - **What it costs:** about 18 MB to download, roughly 25–35 s to connect, a first directory load of about 90 s instead of 10 s, and lookups of 2–10 s instead of 1 s. In 6 test runs on a laptop, 4 worked. When it fails, the page stops and asks you, and never goes direct by itself. Figures are in [docs/nym-notes.md](docs/nym-notes.md).
   - **Scripts:** the SDK takes a custom `fetch` for these reads, but Nym's current package only runs in browsers. A proxy such as Tor could go through the same option, which isn't built or tested.
 - **S:** Keys stay on your device and derive from a wallet signature held in memory. The test wallet keeps a throwaway key in browser storage, so it's for devnets only. Trust assumptions: the circuits, the validator (neither audited), and a Groth16 setup that is **devnet-grade**, since anyone with its one local contribution could forge proofs.
@@ -165,12 +165,12 @@ Both registries report `isEmancipated() == true`. Protocol addresses are in [con
 **Protects against:** an observer linking your deposit to your payment through gas funding; a relayer seeing or refusing you (there isn't one); someone spending a note they don't own; someone changing a payment's recipient or fee; one note taking other depositors' money.
 
 **Doesn't protect against:**
-- The node you submit to, which sees your IP.
+- The node you submit to, which sees your IP. Nym doesn't change this: it covers ENS reads, not transaction submission.
 - Timing and amount analysis. The meter estimates this but can't remove it.
 - A small pool. With few deposits, you're easy to pick out.
 - A note owner griefing the pool's reputation. This is bounded, not solved.
 - Whoever holds the setup's toxic waste.
-- The Sepolia RPC learning which names you look up.
+- The Sepolia RPC learning which names are looked up. With Nym on, it sees the names but not your IP, so it can't tie them to you. With Nym off, it sees both.
 - Timing between an announcement and its payment, which sit close together on-chain. This doesn't identify the payer, but it does pair the two transactions.
 - Someone who holds a recipient's viewing key, who can see all of that recipient's payments but can't spend them.
 
