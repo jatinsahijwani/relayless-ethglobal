@@ -2,7 +2,7 @@
   "name": "@relayless/sdk",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "src/index.ts",
   "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" },

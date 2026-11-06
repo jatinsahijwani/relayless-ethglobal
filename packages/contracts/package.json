@@ -2,7 +2,7 @@
   "name": "@relayless/contracts",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "build": "node script/gen-validator.mjs && forge build",

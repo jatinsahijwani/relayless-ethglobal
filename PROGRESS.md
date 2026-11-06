@@ -55,7 +55,6 @@ Main e2e pool, settled: `seen 12, included 11`. **The gap of 1 is unexplained.**
 - Demo video and GIF.
 - Test a real browser wallet: only the test wallet has been exercised.
 - Time proving on a real phone.
-- Decide the final license, given GPL-3.0 dependencies (`NOTICE.md`).
 - Anon-RPC: docs list no devnet support, so this is probably a documented gap.
 - ENSv2 and pay-to-ENS: not started, on hold.
 

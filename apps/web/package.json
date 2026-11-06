@@ -2,7 +2,7 @@
   "name": "@relayless/web",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "circuits": "mkdir -p public/circuits && cp ../../packages/circuits/build/withdraw_js/withdraw.wasm ../../packages/circuits/build/withdraw.zkey ../../packages/circuits/build/ragequit_js/ragequit.wasm ../../packages/circuits/build/ragequit.zkey public/circuits/",

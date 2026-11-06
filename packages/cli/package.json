@@ -2,7 +2,7 @@
   "name": "@relayless/cli",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "bin": { "relayless": "./src/cli.ts" },
   "dependencies": { "@relayless/sdk": "workspace:*", "viem": "^2.57.7" }

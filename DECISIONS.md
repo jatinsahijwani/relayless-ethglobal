@@ -78,4 +78,4 @@ Foundry covers deposits, the tree, roots and the no-revert guarantees. Frame opc
 Phase 1 uses the PSE Perpetual Powers of Tau; phase 2 is a single local contribution. Anyone with that randomness could forge proofs. Not acceptable beyond a devnet.
 
 ## License note
-`circomlib` is GPL-3.0 and is compiled into the circuits. See `NOTICE.md`; a final license choice for the circuits package should account for this.
+The project is GPL-3.0, because `circomlib`'s GPL-3.0 templates are compiled into the circuits. 0xbow's adapted circuits keep their Apache-2.0 headers, and `patches/` modifies an MIT project. Both are compatible. See `NOTICE.md`.

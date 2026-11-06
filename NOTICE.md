@@ -1,5 +1,9 @@
 # Notices
 
+Relayless is licensed under GPL-3.0 (see `LICENSE`). Versions before this change were published under MIT.
+
+The Apache-2.0 and MIT code listed below is included under those licenses' terms, which are compatible with GPL-3.0.
+
 ## Adapted code
 **0xbow Privacy Pools** (Apache-2.0): https://github.com/0xbow-io/privacy-pools-core
 
@@ -12,7 +16,7 @@ Adapted, with headers kept and changes noted in each file:
 The pool's label scheme and public-exit design also follow theirs.
 
 ## Dependencies with licenses to note
-- **circomlib** (**GPL-3.0**): its templates are compiled into the circuits. This may affect how the compiled circuits can be licensed, so decide this before choosing a final project license.
+- **circomlib** (**GPL-3.0**): its templates are compiled into the circuits, which is why this project is GPL-3.0.
 - **@forshtat/hegota-support** (MIT): frame transaction codec and wire format.
 - **@zk-kit/lean-imt.sol** (MIT): the on-chain tree.
 - **poseidon-solidity**, **poseidon-lite** (MIT): Poseidon hashing.

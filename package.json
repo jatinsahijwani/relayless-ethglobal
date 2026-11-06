@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Withdraw privately to a wallet with zero ETH. No relayer.",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "build:circuits": "pnpm --filter @relayless/circuits build",

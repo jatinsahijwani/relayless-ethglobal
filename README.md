@@ -89,7 +89,7 @@ CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|r
 
 ## CROPS
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.
-- **O:** MIT, with GPL-3.0 dependencies noted in [NOTICE.md](NOTICE.md). Builds and runs from this repo, using a patched third-party sidecar until the public gateway supports it.
+- **O:** GPL-3.0, because circomlib's GPL-3.0 circuits are compiled into the project (see [NOTICE.md](NOTICE.md)). Builds and runs from this repo, using a patched third-party sidecar until the public gateway supports it.
 - **P:** The RPC and mempool node see your IP, and everything on-chain is public: deposits, amounts, recipients, and *k*. Reads fetch all deposits, so they don't reveal which are yours. No trackers or analytics: a full browser run contacted no outside host, and fonts are self-hosted. On a pool with an association set, choosing to verify contacts World, and the ASP links a World ID nullifier to a depositor address, which is already public. Anon-RPC isn't integrated, as its docs list no devnet support.
 - **S:** Keys stay on your device and derive from a wallet signature held in memory. The test wallet keeps a throwaway key in browser storage, so it's for devnets only. Trust assumptions: the circuits, the validator (neither audited), and a Groth16 setup that is **devnet-grade**, since anyone with its one local contribution could forge proofs.
 
