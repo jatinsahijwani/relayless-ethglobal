@@ -15,7 +15,7 @@ import { Problem, plainError } from "./ui";
 import { cfg } from "./config";
 import { eth } from "./ui";
 
-const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved", "ASPs", "Names"] as const;
+const TABS = ["Pay", "Add money", "Privacy", "Activity", "Recover", "Get approved", "ENS"] as const;
 export type Tab = (typeof TABS)[number];
 
 export interface Session {
@@ -33,6 +33,7 @@ export function App() {
   const [report, setReport] = useState<AnonymityReport | null>(null);
   const [tab, setTab] = useState<Tab>("Pay");
   const [switchError, setSwitchError] = useState("");
+  const [ensView, setEnsView] = useState<"ASPs" | "Names">("ASPs");
 
   const refresh = useCallback(async () => {
     if (!conn) return;
@@ -56,7 +57,7 @@ export function App() {
         <span className="tnum text-slate">Private balance <strong className="text-ink">{eth(balance)} ETH</strong></span>
       </header>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-10 flex border-t-2 border-line bg-paper md:static md:mb-8 md:gap-1 md:border-none md:bg-transparent">
-        {TABS.filter((t) => (t !== "Get approved" || cfg.aspUrl) && ((t !== "ASPs" && t !== "Names") || ens)).map((t) => (
+        {TABS.filter((t) => (t !== "Get approved" || cfg.aspUrl) && (t !== "ENS" || ens)).map((t) => (
           <button key={t} onClick={() => setTab(t)} aria-current={t === tab ? "page" : undefined} className={`min-h-14 flex-1 px-1 text-sm font-bold md:min-h-10 md:flex-none md:rounded-lg md:px-4 md:text-base ${t === tab ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>
             {t}
           </button>
@@ -71,7 +72,12 @@ export function App() {
           {tab === "Activity" && <Activity s={session} />}
           {tab === "Recover" && <Recover s={session} />}
           {tab === "Get approved" && <Approve s={session} />}
-          {tab === "ASPs" && ens && (
+          {tab === "ENS" && ens && (
+            <>
+              <div className="mb-6 flex gap-1">
+                {(["ASPs", "Names"] as const).map((v) => <button key={v} onClick={() => setEnsView(v)} aria-current={v === ensView ? "page" : undefined} className={`min-h-10 rounded-lg px-4 font-bold ${v === ensView ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>{v}</button>)}
+              </div>
+              {ensView === "ASPs" ? (
             <Directory cfg={ens.cfg} devnetRpc={cfg.rpc} chainId={cfg.chainId} onUse={async (asp, check) => {
               // Picking an ASP whose root didn't check out takes a second, deliberate step.
               if (check.status !== "verified" && !window.confirm(`${asp.name} didn't pass the check against the pool's chain (${check.status}). Use it anyway?`)) return;
@@ -85,8 +91,11 @@ export function App() {
                 setSwitchError(plainError(e));
               }
             }} />
+              ) : (
+                <Names cfg={ens.cfg} session={{ rl: conn.rl, signer: conn.signer, rpc: cfg.rpc, announcer: ens.announcer, refresh }} />
+              )}
+            </>
           )}
-          {tab === "Names" && ens && <Names cfg={ens.cfg} session={{ rl: conn.rl, signer: conn.signer, rpc: cfg.rpc, announcer: ens.announcer, refresh }} />}
         </main>
         {tab !== "Privacy" && <aside className="hidden md:block"><MeterPanel s={session} /></aside>}
       </div>

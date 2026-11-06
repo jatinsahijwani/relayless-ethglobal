@@ -3,7 +3,7 @@
 //
 // The pool's chain stays the source of truth. ENS says which ASPs exist and what they claim, and `crossCheckRoot` tests
 // those claims against that chain.
-import { concat, createPublicClient, decodeEventLog, encodeAbiParameters, encodeEventTopics, encodeFunctionData, fallback, http, keccak256, labelhash, hexToBytes, numberToHex, parseAbi, parseEventLogs, stringToBytes, stringToHex, toHex, type Address, type Hex } from "viem";
+import { bytesToBigInt, concat, createPublicClient, decodeEventLog, encodeAbiParameters, encodeEventTopics, encodeFunctionData, fallback, http, keccak256, labelhash, hexToBytes, numberToHex, parseAbi, parseEventLogs, stringToBytes, stringToHex, toHex, type Address, type Hex } from "viem";
 import { normalize } from "viem/ens";
 import { sepolia } from "viem/chains";
 import { rpc } from "./chain.js";
@@ -316,7 +316,18 @@ export async function claimReceiveName(cfg: EnsConfig, sender: EnsSender, opts: 
   const label = normalize(opts.label);
   if (label.includes(".")) throw new Error("use a single name with no dots");
   const name = `${label}.${cfg.names.parent}`;
-  const salt = BigInt(keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "uint256" }], [keccak256(stringToHex("OwnedResolver")), sender.address, BigInt(labelhash(label))])));
+  // Free, and before anything is spent. The name is minted to this account, so a smart account that can't receive
+  // ERC-1155 tokens would otherwise pay for two transactions and then fail on the third.
+  try {
+    await createEnsReader(cfg).client.call({ account: sender.address, to: cfg.claimer, data: encodeFunctionData({ abi: CLAIMER_ABI, functionName: "claim", args: [label, ZERO] }) });
+  } catch {
+    throw new Error("This wallet can't claim that name. It may already be taken, or this may be a smart account that can't receive the name. Nothing was spent. Try another name or wallet.");
+  }
+
+  // New each attempt: with a fixed salt, a claim abandoned after this step could never be retried, because the second
+  // deployment would collide with the first. An abandoned resolver serves no name, and costs nothing but its gas.
+  const attempt = bytesToBigInt(crypto.getRandomValues(new Uint8Array(32)));
+  const salt = BigInt(keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "address" }, { type: "uint256" }], [keccak256(stringToHex("OwnedResolver")), sender.address, attempt])));
   const init = encodeFunctionData({ abi: parseAbi(["function initialize((address account, uint256 roleBitmap)[] grants, bytes[] calls)"]), args: [[{ account: sender.address, roleBitmap: FULL_ROLES }], []] });
   const deployed = await sender.send(cfg.contracts.verifiableFactory, encodeFunctionData({ abi: FACTORY_ABI, functionName: "deployProxy", args: [cfg.contracts.permissionedResolverImpl, salt, init] }));
   const [event] = parseEventLogs({ abi: FACTORY_ABI, logs: deployed.logs, eventName: "ProxyDeployed" });
