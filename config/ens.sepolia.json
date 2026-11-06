@@ -1,7 +1,9 @@
 {
   "chainId": 11155111,
   "rpc": "https://gateway.tenderly.co/public/sepolia",
-  "rpcFallbacks": ["https://ethereum-sepolia-rpc.publicnode.com"],
+  "rpcFallbacks": [
+    "https://ethereum-sepolia-rpc.publicnode.com"
+  ],
   "logSpan": 9000,
   "explorer": "https://sepolia.etherscan.io",
   "contracts": {
@@ -35,6 +37,6 @@
     "stealthMetaAddress": "stealth-meta-address"
   },
   "aspSaltPreimage": "relayless.asp",
-  "deployBlock": null,
-  "claimer": null
+  "deployBlock": 12076106,
+  "claimer": "0x0a1f421cd39dd9015483d6c16aec6ffc819cd85b"
 }
