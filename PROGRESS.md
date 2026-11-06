@@ -81,6 +81,7 @@ Live and off by default. Details are in [docs/nym-notes.md](docs/nym-notes.md).
 | Local app with Nym on | Sepolia routed, local chain and approval server direct, verdicts right |
 | SDK tests | 43/43 |
 | Author's own check on the preview, by hand | Reported working in 4 tests, and on a phone. Not timed |
+| Live link, one run each way, logged out | Nym off: worked, no Nym hosts. Nym on: worked in 70 s, no browser request to a Sepolia RPC |
 
 **Not tested yet:** a slow connection, a real wallet, a claim with Nym on, and Tor. `/join` and paying were not run again in the browser. All timings are from the laptop runs.
 
