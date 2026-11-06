@@ -60,6 +60,9 @@ importers:
       '@fontsource/atkinson-hyperlegible':
         specifier: ^5.1.0
         version: 5.3.0
+      '@nymproject/mix-fetch':
+        specifier: 3.0.1
+        version: 3.0.1
       '@relayless/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -653,6 +656,12 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@nymproject/mix-fetch@3.0.1':
+    resolution: {integrity: sha512-5RhL+Yxm3W1ZSfkI9szfOpkKMCD0r1cs3hDJumIlejDZVa4c7gE5Wk+SI4xKo/uP1sBTXZAFk/ekNBCDzzrizA==}
+
+  '@nymproject/mix-tunnel@0.3.1':
+    resolution: {integrity: sha512-6s7CJKCnweDLy7xqOwO/Sk8oTnAnTvmDqXpdoUsaY5BWsSYs5mRoJfiYyNaDUssOMS2V/980jgG8hGFFFKs73w==}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -2023,6 +2032,12 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.3
+
+  '@nymproject/mix-fetch@3.0.1':
+    dependencies:
+      '@nymproject/mix-tunnel': 0.3.1
+
+  '@nymproject/mix-tunnel@0.3.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 

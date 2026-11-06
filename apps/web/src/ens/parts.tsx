@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Address } from "viem";
-import { createEnsReader, type EnsConfig, type NameAccess } from "@relayless/sdk/ens";
+import type { EnsConfig, NameAccess } from "@relayless/sdk/ens";
+import { ensReader, nymReadError, nymRequested } from "./nym";
 import { Button, Problem, plainError, short } from "../ui";
 
 /** Shown wherever a step needs the pool. The static demo has no chain to send it to, and says so plainly. */
@@ -46,7 +47,7 @@ export function Access({ cfg, name }: { cfg: EnsConfig; name: string }) {
   const [error, setError] = useState("");
   useEffect(() => {
     if (!open || access !== undefined) return;
-    createEnsReader(cfg).nameAccess(name).then(setAccess).catch((e) => setError(plainError(e)));
+    ensReader(cfg).nameAccess(name).then(setAccess).catch((e) => setError(nymRequested ? nymReadError : plainError(e)));
   }, [open]);
   return (
     <div className="mt-2">

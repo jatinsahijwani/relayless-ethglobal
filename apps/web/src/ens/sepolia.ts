@@ -1,6 +1,7 @@
 // A browser wallet on Sepolia, for the only ENS step that writes: claiming a name.
 import type { Address, Hex } from "viem";
-import { createEnsReader, type EnsConfig, type EnsSender } from "@relayless/sdk/ens";
+import type { EnsConfig, EnsSender } from "@relayless/sdk/ens";
+import { ensReader } from "./nym";
 import { stealthKeysFromSignature, stealthTypedData, type StealthKeys } from "@relayless/sdk/stealth";
 
 export async function sepoliaWallet(cfg: EnsConfig): Promise<{ sender: EnsSender; keys(): Promise<StealthKeys> }> {
@@ -13,7 +14,7 @@ export async function sepoliaWallet(cfg: EnsConfig): Promise<{ sender: EnsSender
   } catch {
     await eth.request({ method: "wallet_addEthereumChain", params: [{ chainId, chainName: "Sepolia", rpcUrls: [cfg.rpc], nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 }, blockExplorerUrls: [cfg.explorer] }] });
   }
-  const { client } = createEnsReader(cfg);
+  const { client } = ensReader(cfg);
   return {
     sender: {
       address,

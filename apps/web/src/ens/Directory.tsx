@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { crossCheckRoot, createEnsReader, type AspEntry, type EnsConfig, type RootCheck } from "@relayless/sdk/ens";
+import { crossCheckRoot, type AspEntry, type EnsConfig, type RootCheck } from "@relayless/sdk/ens";
 import { Button, Problem, Screen, plainError } from "../ui";
 import { Access, AddressLink, DevnetNotice, Mono, Row } from "./parts";
+import { ensReader, nymReadError, nymRequested } from "./nym";
 
 const VERDICT: Record<RootCheck["status"], { good: boolean; text: string }> = {
   verified: { good: true, text: "Checked. The pool's chain holds this exact root from this operator, and the pool takes roots only from that operator." },
@@ -61,7 +62,7 @@ export function Directory({ cfg, devnetRpc, chainId, onUse }: { cfg: EnsConfig; 
   const load = () => {
     setError("");
     setAsps(null);
-    createEnsReader(cfg).listAsps().then(setAsps).catch((e) => setError(plainError(e)));
+    ensReader(cfg).listAsps().then(setAsps).catch((e) => setError(nymRequested ? nymReadError : plainError(e)));
   };
   useEffect(load, []);
   return (

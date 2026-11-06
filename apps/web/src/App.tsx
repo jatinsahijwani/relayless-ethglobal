@@ -10,6 +10,7 @@ import { Approve } from "./screens/Approve";
 import { Directory } from "./ens/Directory";
 import { Names } from "./ens/Names";
 import { ens } from "./ens/config";
+import { NymToggle } from "./ens/NymToggle";
 import { connectPool } from "./wallet";
 import { Problem, plainError } from "./ui";
 import { cfg } from "./config";
@@ -74,6 +75,7 @@ export function App() {
           {tab === "Get approved" && <Approve s={session} />}
           {tab === "ENS" && ens && (
             <>
+              <NymToggle />
               <div className="mb-6 flex gap-1">
                 {(["ASPs", "Names"] as const).map((v) => <button key={v} onClick={() => setEnsView(v)} aria-current={v === ensView ? "page" : undefined} className={`min-h-10 rounded-lg px-4 font-bold ${v === ensView ? "bg-ink text-paper" : "text-slate hover:text-ink"}`}>{v}</button>)}
               </div>

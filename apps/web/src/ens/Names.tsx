@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { parseEther, type Address, type Hex } from "viem";
+import { BaseError, parseEther, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { claimReceiveName, createEnsReader, type EnsConfig } from "@relayless/sdk/ens";
+import { claimReceiveName, type EnsConfig } from "@relayless/sdk/ens";
 import { deriveStealthPayment, isMetaAddress, metaAddressOf, scanAnnouncements, stealthKeysFromSignature, stealthTypedData, type ReceivedPayment, type StealthKeys, type StealthPayment } from "@relayless/sdk/stealth";
 import type { Relayless, Signer } from "@relayless/sdk";
 import { Button, Field, Problem, Screen, eth, inputClass, plainError, short } from "../ui";
 import { Access, DevnetNotice, Mono, Row } from "./parts";
 import { sepoliaWallet } from "./sepolia";
+import { ensReader, ensTransportOptions, nymReadError, nymRequested } from "./nym";
 
 /** Present only in the local app, where there's a pool to pay from. */
 export interface DevnetSession {
@@ -17,7 +18,12 @@ export interface DevnetSession {
   refresh(): Promise<void>;
 }
 
-const ensError = (e: unknown) => (/normaliz|invalid|disallowed|label/i.test(String((e as Error)?.message ?? e)) ? "That isn't a valid name. Check the spelling." : plainError(e));
+const ensError = (e: unknown) => {
+  // On the mixnet a failed read can mention anything in its payload, so only errors from outside viem count as a bad name.
+  const fromRead = e instanceof BaseError;
+  if (!(nymRequested && fromRead) && /normaliz|invalid|disallowed|label/i.test(String((e as Error)?.message ?? e))) return "That isn't a valid name. Check the spelling.";
+  return nymRequested && fromRead ? nymReadError : plainError(e);
+};
 
 function LookUp({ cfg, name, setName, metaAddress, setMetaAddress }: { cfg: EnsConfig; name: string; setName(n: string): void; metaAddress: string | null | undefined; setMetaAddress(m: string | null | undefined): void }) {
   const [busy, setBusy] = useState(false);
@@ -26,7 +32,7 @@ function LookUp({ cfg, name, setName, metaAddress, setMetaAddress }: { cfg: EnsC
   const look = async () => {
     setBusy(true); setError(""); setDerived([]); setMetaAddress(undefined);
     try {
-      setMetaAddress(await createEnsReader(cfg).stealthMetaAddress(name));
+      setMetaAddress(await ensReader(cfg).stealthMetaAddress(name));
     } catch (e) {
       setError(ensError(e));
     } finally {
@@ -36,7 +42,7 @@ function LookUp({ cfg, name, setName, metaAddress, setMetaAddress }: { cfg: EnsC
   return (
     <section className="mb-9 max-w-2xl">
       <h2 className="mb-2 text-2xl font-bold">Look up a name</h2>
-      <Field label="Name" hint="Your browser asks a Sepolia RPC directly. No server of ours sees this.">
+      <Field label="Name" hint={nymRequested ? "Your browser asks a Sepolia RPC through the mixnet. No server of ours sees this." : "Your browser asks a Sepolia RPC directly. No server of ours sees this."}>
         <input className={inputClass} value={name} autoCapitalize="none" spellCheck={false} onChange={(e) => { setName(e.target.value.trim()); setMetaAddress(undefined); setDerived([]); }} placeholder={`alice.${cfg.names.parent}`} />
       </Field>
       <Button disabled={busy || !name} onClick={look}>{busy ? "Looking…" : "Look up"}</Button>
@@ -70,13 +76,13 @@ function Claim({ cfg }: { cfg: EnsConfig }) {
     setError(""); setDone(null);
     try {
       setStep("Checking that name");
-      if (!(await createEnsReader(cfg).isClaimable(label))) throw new Error("That name is taken.");
+      if (!(await ensReader(cfg).isClaimable(label))) throw new Error("That name is taken.");
       setStep("Connecting your wallet");
       const { sender, keys } = await sepoliaWallet(cfg);
       setStep("Sign once to make your keys");
       const k = await keys();
       setStep("Confirm three transactions: your resolver, its record, then the name");
-      const { name } = await claimReceiveName(cfg, sender, { label, metaAddress: metaAddressOf(k), appAddress: privateKeyToAccount(k.appKey).address });
+      const { name } = await claimReceiveName(cfg, sender, { label, metaAddress: metaAddressOf(k), appAddress: privateKeyToAccount(k.appKey).address, transport: ensTransportOptions() });
       setDone(name);
     } catch (e) {
       setError(ensError(e));
