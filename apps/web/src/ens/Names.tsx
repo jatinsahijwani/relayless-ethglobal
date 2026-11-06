@@ -82,7 +82,7 @@ function Claim({ cfg }: { cfg: EnsConfig }) {
       setStep("Sign once to make your keys");
       const k = await keys();
       setStep("Confirm three transactions: your resolver, its record, then the name");
-      const { name } = await claimReceiveName(cfg, sender, { label, metaAddress: metaAddressOf(k), appAddress: privateKeyToAccount(k.appKey).address, transport: ensTransportOptions() });
+      const { name } = await claimReceiveName(cfg, sender, { label, metaAddress: metaAddressOf(k), appAddress: privateKeyToAccount(k.appKey).address, transport: ensTransportOptions(cfg) });
       setDone(name);
     } catch (e) {
       setError(ensError(e));

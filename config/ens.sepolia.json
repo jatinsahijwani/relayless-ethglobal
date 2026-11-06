@@ -4,6 +4,12 @@
   "rpcFallbacks": [
     "https://ethereum-sepolia-rpc.publicnode.com"
   ],
+  "routedRpcs": [
+    "https://gateway.tenderly.co/public/sepolia",
+    "https://ethereum-sepolia-rpc.publicnode.com",
+    "https://0xrpc.io/sep",
+    "https://sepolia.gateway.tenderly.co"
+  ],
   "logSpan": 9000,
   "explorer": "https://sepolia.etherscan.io",
   "contracts": {

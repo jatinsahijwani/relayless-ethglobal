@@ -13,6 +13,8 @@ export interface EnsConfig {
   rpc: string;
   /** Tried when `rpc` refuses, as public endpoints do under load. They see the same lookups, so choose them with care. */
   rpcFallbacks?: string[];
+  /** For reads over a mixnet or proxy, where exits are shared and a public RPC may be limiting one for other people's traffic. All must serve log history. */
+  routedRpcs?: string[];
   logSpan: number;
   explorer: string;
   contracts: { ethRegistry: Address; universalResolver: Address; verifiableFactory: Address; permissionedResolverImpl: Address };

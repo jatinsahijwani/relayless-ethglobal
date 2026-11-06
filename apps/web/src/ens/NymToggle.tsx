@@ -36,7 +36,7 @@ export function NymToggle() {
       )}
       {nym.state === "ready" && (
         <p role="status" className="border-l-4 border-pool pl-3 text-pool">
-          Routed via Nym: {nym.requests} {nym.requests === 1 ? "request" : "requests"} so far{nym.lastMs !== null && `, last took ${(nym.lastMs / 1000).toFixed(1)} s`}.
+          Routed via Nym: {nym.requests} {nym.requests === 1 ? "request" : "requests"} so far{nym.lastMs !== null && `, last took ${(nym.lastMs / 1000).toFixed(1)} s`}{nym.rpc && ` to ${nym.rpc}`}.
           {slow && " This one is slow. Still waiting, and it won't go direct."}
         </p>
       )}
