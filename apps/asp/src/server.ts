@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import type { Hex } from "viem";
 import { AspError, createAsp, emptyState, type AspState } from "./asp.js";
 import { liveChain } from "./chain.js";
+import { directoryQueue, liveDirectory } from "./directory.js";
 import { realWorld } from "./world.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -72,7 +73,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const action = process.env.WORLD_ACTION ?? "join-approved-set";
   const environment = process.env.WORLD_ENVIRONMENT ?? "production";
   const world = WORLD_APP_ID && WORLD_RP_ID && WORLD_SIGNING_KEY ? realWorld({ rpId: WORLD_RP_ID, signingKey: WORLD_SIGNING_KEY, action, environment }) : null;
+  // Off unless this ASP has a name in the directory. The approved set works the same either way.
+  const ensLabel = process.env.ASP_ENS_LABEL;
+  const directory = ensLabel ? directoryQueue(liveDirectory(JSON.parse(readFileSync(join(root, "config/ens.sepolia.json"), "utf8")), ensLabel, process.env.ASP_KEY as Hex), (e) => console.error("publishing to ENS failed; the approved set isn't affected", e)) : undefined;
+  // Catches up after a restart, or a publish that failed. Costs nothing if ENS already has this root.
+  if (directory && state.ref) directory.publish({ root: state.ref.root, slot: BigInt(state.ref.slot) });
   const asp = createAsp({
+    directory,
     pool: cfg.pool,
     action,
     environment,

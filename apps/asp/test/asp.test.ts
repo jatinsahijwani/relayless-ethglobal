@@ -5,13 +5,14 @@ import { privateKeyToAccount } from "viem/accounts";
 import { numberToHex, type Address } from "viem";
 import { AspError, createAsp, emptyState, joinMessage, type AspState } from "../src/asp.js";
 import { realWorld } from "../src/world.js";
+import { directoryQueue } from "../src/directory.js";
 
 const POOL: Address = "0x00000000000000000000000000000000000000b1";
 const alice = privateKeyToAccount(numberToHex(1n, { size: 32 }));
 const bob = privateKeyToAccount(numberToHex(2n, { size: 32 }));
 const stranger = privateKeyToAccount(numberToHex(3n, { size: 32 }));
 
-function setup({ verify = true, world = true }: { verify?: boolean; world?: boolean } = {}) {
+function setup({ verify = true, world = true, directory }: { verify?: boolean; world?: boolean; directory?: { publish(ref: { root: `0x${string}`; slot: bigint }): void } } = {}) {
   const deposits = [{ depositor: alice.address, label: 11n }, { depositor: bob.address, label: 22n }, { depositor: alice.address, label: 33n }];
   const published: bigint[][] = [];
   const state: AspState = emptyState();
@@ -25,6 +26,7 @@ function setup({ verify = true, world = true }: { verify?: boolean; world?: bool
     chain: { deposits: async () => deposits, publish: async (labels) => (published.push(labels), { sourceId: "0x01", slot: 5n, root: "0x02" }) },
     state,
     save: () => {},
+    directory,
   });
   return { asp, deposits, published, state, calls: () => verifyCalls };
 }
@@ -148,4 +150,73 @@ test("real client: signs an rp_context locally", () => {
   const c = realWorld({ rpId: "rp_abc", signingKey: "0x" + "11".repeat(32), action: "a", environment: "production" }).rpContext();
   assert.equal(c.rp_id, "rp_abc");
   assert.ok(c.signature && c.nonce && c.expires_at > c.created_at);
+});
+
+// ---- Publishing to ENS ----
+
+const ref = (n: number) => ({ root: `0x${String(n).padStart(64, "0")}` as `0x${string}`, slot: BigInt(n) });
+
+test("an approved set is told to the directory once the chain has it, and an unchanged set isn't", async () => {
+  const told: unknown[] = [];
+  const { asp } = setup({ directory: { publish: (r) => told.push(r) } });
+  await join(asp, alice, proof(alice.address));
+  assert.deepEqual(told, [{ root: "0x02", slot: 5n }]);
+  await asp.set();
+  assert.equal(told.length, 1);
+});
+
+test("the recent-root refresh also reaches the directory, because an old slot can no longer be checked", async () => {
+  const told: unknown[] = [];
+  const { asp } = setup({ directory: { publish: (r) => told.push(r) } });
+  await join(asp, alice, proof(alice.address));
+  await asp.republish();
+  assert.equal(told.length, 2);
+});
+
+test("a Sepolia outage doesn't touch joining: it still approves, and the error is only logged", async () => {
+  const errors: unknown[] = [];
+  const directory = directoryQueue(async () => { throw new Error("sepolia is down"); }, (e) => errors.push(e));
+  const { asp } = setup({ directory });
+  assert.deepEqual(await join(asp, alice, proof(alice.address)), { approved: true, labels: 2 });
+  await directory.settled();
+  assert.equal(errors.length, 1);
+});
+
+test("a slow Sepolia doesn't hold up joining", async () => {
+  let release = () => {};
+  const directory = directoryQueue(() => new Promise<void>((r) => { release = r; }), () => {});
+  const { asp } = setup({ directory });
+  assert.deepEqual(await join(asp, alice, proof(alice.address)), { approved: true, labels: 2 });
+  release();
+  await directory.settled();
+});
+
+test("directory queue: one at a time, and only the newest of a burst goes out", async () => {
+  const sent: bigint[] = [];
+  const gates: (() => void)[] = [];
+  const q = directoryQueue((r) => new Promise<void>((res) => { sent.push(r.slot); gates.push(res); }), () => {});
+  q.publish(ref(1));
+  q.publish(ref(2));
+  q.publish(ref(3));
+  assert.deepEqual(sent, [1n]);
+  gates[0]();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(sent, [1n, 3n]);
+  gates[1]();
+  await q.settled();
+  assert.deepEqual(sent, [1n, 3n]);
+});
+
+test("directory queue: keeps working after a failure", async () => {
+  const sent: bigint[] = [];
+  let fail = true;
+  const q = directoryQueue(async (r) => {
+    if (fail) { fail = false; throw new Error("once"); }
+    sent.push(r.slot);
+  }, () => {});
+  q.publish(ref(1));
+  await q.settled();
+  q.publish(ref(2));
+  await q.settled();
+  assert.deepEqual(sent, [2n]);
 });

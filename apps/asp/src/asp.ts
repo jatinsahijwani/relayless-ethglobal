@@ -45,6 +45,8 @@ export interface AspOptions {
   chain: Chain;
   state: AspState;
   save(state: AspState): void;
+  /** Told about each root once the chain has it. Must return at once and never throw: see directory.ts. */
+  directory?: { publish(ref: { root: Hex; slot: bigint }): void };
 }
 
 export class AspError extends Error {
@@ -79,6 +81,7 @@ export function createAsp(o: AspOptions) {
     o.state.ref = { sourceId: ref.sourceId, slot: ref.slot.toString(), root: ref.root };
     o.state.publishedLabels = asText;
     o.save(o.state);
+    o.directory?.publish({ root: ref.root, slot: ref.slot });
   }
 
   return {
