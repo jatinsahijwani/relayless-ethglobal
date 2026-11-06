@@ -1,6 +1,6 @@
 # Nym mixnet: research notes
 
-Checked against Nym's docs, the npm packages and the live mixnet on 2026-11-06, with results measured from a laptop in headless Chromium. Nothing blocks the feature. Its limits are speed and how often an exit fails.
+Checked against Nym's docs, the npm packages and the live mixnet on 2026-11-06, with results measured from a laptop in headless Chromium. Nothing blocks the feature. Its limits are speed and how often a connection fails: 4 of 6 full page runs on the deployed page worked.
 
 ## What to use
 | | |
@@ -28,11 +28,19 @@ The [exit policy](https://nymtech.net/.wellknown/network-requester/exit-policy.t
 TLS runs end to end from the WASM to the RPC, so the exit can't read the query.
 
 ## RPC reachability
-| Host | Through the mixnet |
-|---|---|
-| `gateway.tenderly.co` | Works once a tunnel works |
-| `ethereum-sepolia-rpc.publicnode.com` | 3 of 7 tries, at 19–30 s each, so routed reads don't use it |
-| `sepolia.drpc.org` | Timed out in its one try, in a run where every host timed out. It's also unusable for logs directly |
+Exits are shared, so a public RPC may already be limiting one for other people's traffic. The same RPC can be fine on one exit and refuse the next. Early page runs failed because of this: Tenderly answered 429 from the first call on one exit, and from the first batch of 8 on another, and waiting 26 s didn't clear it.
+
+| Host | Through the mixnet | Used for routed reads |
+|---|---|---|
+| `gateway.tenderly.co` | Works, but some exits get 429 | Yes, first |
+| `ethereum-sepolia-rpc.publicnode.com` | 3 of 8 tries in early probes, later fine, including in full page runs | Yes |
+| `0xrpc.io/sep` | Works, including bursts | Yes |
+| `sepolia.gateway.tenderly.co` | Works | Yes, last. It may share Tenderly's limit |
+| `api.zan.top/eth-sepolia` | Batches work, but no usable log history | No |
+| `eth-sepolia.api.onfinality.io/public`, `ethereum-sepolia.gateway.tatum.io` | Batches refused | No |
+| `sepolia.drpc.org`, `1rpc.io/sepolia` | Unusable directly too | No |
+
+A cold host costs 6–20 s on first contact, then about 1 s a request. The list is `routedRpcs` in `config/ens.sepolia.json`.
 
 ## What differs from fetch
 - **Cancelling:** `AbortController` is ignored, so an in-flight request can't be cancelled. To stop waiting, race it against a timer.
@@ -53,12 +61,32 @@ TLS runs end to end from the WASM to the RPC, so the exit can't read the query.
 | 4 | 34 s | Timed out, then 27 s | 0.9–1.3 s | 1.6 s |
 | 5 | 34 s | 20 s | 1.0–1.6 s | 1.1 s |
 
-**Failures:** of the 7 solo probes, 2 failed. In one, a chosen gateway didn't support `wss`. In the other, the tunnel reported `ready` but every request timed out for its whole life, and the state stayed `ready`, so only a request's failure reveals it. A reload is the fix, because a new tunnel usually picks a new exit.
+**Failures:** of the 8 solo probes, 2 failed. In one, a chosen gateway didn't support `wss`. In the other, the tunnel reported `ready` but every request timed out for its whole life, and the state stayed `ready`, so only a request's failure reveals it. A reload is the fix, because a new tunnel usually picks a new exit.
 
 **Load:** six clients at once on one laptop all failed during setup. A page run alongside another client also failed twice in a row, after over 4 minutes. Solo runs were fine, so these failures came from load on this machine or from bad exits, and I can't separate the two. A phone may be more limited than a laptop, and that's untested.
+
+**Full page, on a deployed Vercel preview, one run at a time, on a laptop:**
+| Run | Tunnel up | Directory listed | Look up `alice` | Roles | RPC used |
+|---|---|---|---|---|---|
+| 1 | 34 s | Failed after the tunnel came up: "operation timed out" | | | |
+| 2 | 24 s | 103 s | 2.5 s | 9.4 s | `0xrpc.io` |
+| 3 | 28 s | 82 s | 3.0 s | 9.9 s | publicnode, after a Tenderly 429 |
+| 4 | 35 s | 92 s | 1.9 s | 6.4 s | publicnode |
+| 5 | 24 s | 86 s | 10.1 s | 12.9 s | publicnode, after a Tenderly 429 |
+| 6 | 26 s | Failed after the tunnel came up: "operation timed out" | | | |
+
+Directly, on the same page: directory 9–10 s, `alice` about 1 s, roles 2–3 s. So once connected, a lookup costs 2–10 times as long, and the first directory load about 9 times.
+
+Each failed run ended in the failure message, with no request to any RPC from the browser. Directory times include the tunnel, and include the first load of the 18 MB chunk only as far as this laptop's connection goes.
+
+**Not measured:** a phone, a slow connection, or a real wallet claim with Nym on. These 6 runs are a small sample from one machine on one evening, so the success rate is a rough guide.
 
 ## What the design does with this
 - **Mode per page load.** `?nym=1` decides it, so a routed page sends nothing direct, even on its first read. The toggle reloads the page, which also gives a new tunnel a clean start.
 - **Never direct on its own.** A failure stops the read and offers "Try a new connection" or "Turn off Nym and connect directly".
-- **Queue and limits.** One request at a time, 75 s each, batches of 8, one retry, no fallback RPC. Three failures in a row, or 150 s of setup, end in the failure message.
+- **Rotation.** A 429 or no answer moves to the next RPC in `routedRpcs`, and stays there. Rotation never leaves the mixnet.
+- **Queue and limits.** One request at a time, 75 s each, batches of 8, one retry. Three failures in a row, or 150 s of setup, end in the failure message.
 - **Loaded on demand.** The 18 MB chunk is fetched only when the toggle is on, so the default page and the EF demo don't load it.
+
+## Scripts and Tor
+`createEnsReader(cfg, { fetch })` takes any fetch, so a script could use one that goes through a proxy, such as Tor's. That isn't built or tested. Nym has no Node path to offer here, and the repo has no CLI.
