@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { isAddress, parseEther, type Address, type Hex } from "viem";
 import type { Session } from "../App";
-import { Button, Field, Problem, Screen, eth, inputClass, plainError, short } from "../ui";
+import { Button, Field, Problem, Screen, eth, inputClass, plainError } from "../ui";
 import { addActivity, nextFreshIndex, walletBalance } from "../wallet";
+import { named } from "../demo";
 import { UnderTheHood } from "./UnderTheHood";
+import { useProvingClock } from "./Hood";
 
 type Stage = 0 | 1 | 2 | 3 | 4;
 const STAGES = ["Proving this money is yours", "Sending to the mempool", "Waiting for a block", "Arrived"];
@@ -21,23 +23,34 @@ export function Pay({ s }: { s: Session }) {
   const [error, setError] = useState("");
   const [hood, setHood] = useState(false);
   const before = useRef<bigint>(0n);
+  const clock = useProvingClock();
+  const proved = useRef(false);
 
   useEffect(() => {
     if (!fresh) setFresh(s.rl.freshAddress(Number(localStorage.getItem("relayless.freshIndex") ?? 0)));
   }, []);
 
-  // The recipient's real balance, read from the chain the whole time.
+  const chosen = useNew ? fresh : (isAddress(custom) ? (custom as Address) : null);
+  const watched = recipient ?? chosen;
+
+  // The recipient's real balance, read from the chain the whole time, before the payment as well as after.
   useEffect(() => {
-    if (!recipient) return;
+    if (!watched) { setLive(null); return; }
     let on = true;
     const tick = async () => {
-      const b = await walletBalance(recipient).catch(() => null);
+      const b = await walletBalance(watched).catch(() => null);
       if (on && b !== null) setLive(b);
       if (on) setTimeout(tick, 1200);
     };
     tick();
     return () => { on = false; };
-  }, [recipient]);
+  }, [watched]);
+
+  // Stage 1 ends when the prover really finishes.
+  useEffect(() => {
+    if (stage === 1 && proved.current && !clock.proving) setStage(2);
+    if (clock.proving) proved.current = true;
+  }, [clock.proving, stage]);
 
   const unspent = s.notes.filter((n) => !n.spent);
   const leaves = Math.max(0, ...unspent.map((n) => n.leafIndex));
@@ -54,10 +67,10 @@ export function Pay({ s }: { s: Session }) {
     before.current = await walletBalance(to);
     setLive(before.current);
     setRecipient(to);
+    proved.current = false;
     setStage(1);
     try {
       const handles = await s.rl.pay({ to, amount: wei, minAnon });
-      setStage(2);
       if (useNew) nextFreshIndex();
       handles.forEach((h) => addActivity({ hash: h.hash, to, amount: h.amount.toString(), fee: h.fee.toString(), at: Date.now(), fresh: useNew, proveMs: h.proveMs }));
       setHashes(handles.map((h) => h.hash));
@@ -84,6 +97,12 @@ export function Pay({ s }: { s: Session }) {
         </div>
       ) : !recipient ? (
         <div className="max-w-md">
+          {chosen && (
+            <div className="mb-5" data-testid="balance-before">
+              <p className="text-slate">{useNew ? "The new wallet" : named(chosen, "Their wallet")} holds</p>
+              <p className="tnum font-display text-5xl font-bold md:text-6xl">{live === null ? "…" : eth(live, 5)} <span className="text-2xl md:text-3xl">ETH</span></p>
+            </div>
+          )}
           <fieldset className="mb-4" disabled={busy}>
             <legend className="mb-1 font-bold">Pay to</legend>
             <label className="flex min-h-11 items-center gap-2"><input type="radio" checked={useNew} onChange={() => setUseNew(true)} /> A new wallet of mine, holding zero ETH</label>
@@ -103,8 +122,8 @@ export function Pay({ s }: { s: Session }) {
 
       {recipient && (
         <div>
-          <p className="text-slate">{short(recipient)} holds</p>
-          <p key={stage === 4 ? "done" : "wait"} className={`tnum font-display text-6xl font-bold md:text-8xl ${stage === 4 ? "arrived" : ""}`} aria-live="polite">{live === null ? "…" : eth(live, 5)} <span className="text-3xl md:text-5xl">ETH</span></p>
+          <p className="text-slate">{useNew ? named(recipient, "The new wallet") : named(recipient, "Their wallet")} holds</p>
+          <p key={stage === 4 ? "done" : "wait"} data-testid="balance-live" className={`tnum rounded-lg font-display text-6xl font-bold md:text-8xl ${stage === 4 ? "arrived" : ""}`} aria-live="polite">{live === null ? "…" : eth(live, 5)} <span className="text-3xl md:text-5xl">ETH</span></p>
           <ol className="mt-4 space-y-1">
             {STAGES.map((label, i) => {
               const n = (i + 1) as Stage;
@@ -112,7 +131,7 @@ export function Pay({ s }: { s: Session }) {
               return (
                 <li key={label} className={`flex items-center gap-2 ${state === "later" ? "text-slate" : ""} ${state === "now" ? "font-bold" : ""}`}>
                   <span aria-hidden="true" className={`inline-block h-3 w-3 rounded-full ${state === "done" ? "bg-pool" : state === "now" ? "bg-flare" : "bg-line"}`} />
-                  {label}
+                  {n === 1 && state === "now" && clock.proving ? `Proving… ${clock.seconds} s` : n === 1 && state === "done" && clock.ms !== null ? `Proved in ${clock.seconds} s` : label}
                 </li>
               );
             })}
@@ -122,6 +141,7 @@ export function Pay({ s }: { s: Session }) {
             <div className="mt-3">
               <Button variant="quiet" className="!px-0" onClick={() => setHood(!hood)} aria-expanded={hood}>Under the hood</Button>
               {hood && hashes.map((h) => <UnderTheHood key={h} hash={h} />)}
+              {hood && <Button variant="quiet" className="!px-0" onClick={() => s.go("Under the hood")}>Compare mempools and see the live mempool</Button>}
             </div>
           )}
           {stage === 4 && <Button className="mt-5" onClick={() => { setRecipient(null); setStage(0); setHashes([]); setHood(false); }}>Make another payment</Button>}
