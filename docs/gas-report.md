@@ -1,17 +1,27 @@
 # Gas report
 
-Measured from receipts on the local stack (ethrex `9aa3645d`, patched sidecar), small trees of about 5–13 leaves. **Not measured on the public devnet, which can't admit these transactions yet.** Regenerate with `pnpm e2e`.
+**This file is the source of truth for these numbers.** Other docs quote it.
+
+Measured from receipts on the local stack (ethrex `9aa3645d`, patched sidecar). **Not measured on the public devnet, which can't admit these transactions yet.** Regenerate with `pnpm e2e`, which also writes the latest figures to `.relayless-e2e-local.json`.
 
 ## A withdrawal
 | Part | Gas | Notes |
 |---|---|---|
-| VERIFY frame | **253,176** | 7 public inputs, including the 20k first-use nonce key |
+| VERIFY frame | **253,176** | 7 public inputs, including the 20k first-use nonce key. See "How much it varies" |
 | SENDER frame, execution | 183,773–245,929 | Tree insert and root publish; grows with tree depth |
 | SENDER frame, state | 379,440–477,360 | New storage slots, new account for a fresh recipient |
 | Refund frame | 9,945 | |
-| **Total, fresh recipient** | **about 950,000** | |
+| **Total, fresh recipient** | **about 900,000** | 898,730 and 906,432 in the last two full e2e runs. Grows when the tree needs new storage |
 
-With an association set, the VERIFY frame is 253,344 gas.
+### How much it varies
+253,176 is the figure quoted everywhere. Individual runs differ by a few hundred gas, and the cause hasn't been pinned down:
+
+| Pool | VERIFY frame, seen across runs |
+|---|---|
+| No association set | 253,068–253,176 |
+| With an association set | 253,236–253,344 |
+
+So the live panel in the app, which reads real receipts and simulations, can show a slightly different number. Say "about 253,000" out loud.
 
 ## Against the budgets
 | Budget | Gas | Fits? |
@@ -45,4 +55,4 @@ These set `maxCost`, which must fit inside the note's fee and is mostly refunded
 At the default 1 gwei max fee, about 0.003 ETH is held and the unused part returns. Worst case for the SENDER frame, under Foundry's gas costs: 812,701 execution at full tree depth with a gas-burning recipient.
 
 ## Proving
-About 1.6–2 s for the 24,965-constraint withdrawal circuit, in Node and in a Chrome Web Worker on this machine, against the 10 s target. Ragequit is 12,516 constraints. Not measured on a phone.
+About 2 s for the 24,965-constraint withdrawal circuit on this laptop, against the 10 s target: 1.8–2.2 s in a Chrome Web Worker, and 1.6–2.6 s across runs including Node, with the highest while other work was running. Ragequit is 12,516 constraints. Not measured on a phone.

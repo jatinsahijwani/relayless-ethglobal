@@ -2,6 +2,8 @@
 
 This records the Phase 0 spikes, which were throwaway and kept outside this repo.
 
+> **These are historical numbers from a 7-constraint spike circuit with 6 public inputs**, not the shipped pool. For today's figures (253,176 gas to verify, 7 public inputs, a 24,965-constraint circuit, about 2 s to prove), see [gas-report.md](gas-report.md).
+
 ## Bottom line
 **The withdrawal mechanism works, but only on a local stack today.** A real Groth16 proof verified in a VERIFY frame, a staked pool paid the gas, and a fresh 0-ETH address received funds. **The public gateway cannot admit this tx yet, because of two independent rules.** Both need EF's help or a local patch.
 
@@ -24,7 +26,7 @@ This records the Phase 0 spikes, which were throwaway and kept outside this repo
 - **Config:** `precompiles` set to CALLING-040's list.
 - **Tests:** 138 unit tests pass across the 5 affected test files, including 3 new; the full suite was not run. Enforcement was also checked live against the patched sidecar's RPC.
 
-## Measured gas (6 public inputs, spike circuit)
+## Measured gas (Phase 0: 6 public inputs, spike circuit, not the shipped pool)
 | Item | Gas |
 |---|---|
 | VERIFY frame, including the 20k first-use nonce key | **241,441** |

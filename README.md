@@ -197,7 +197,7 @@ Both registries report `isEmancipated() == true`. Protocol addresses are in [con
 **Fee-bump limit, off by default.** Build the validator with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` to reject max fees outside a fixed range, which caps fee bumps per note. It limits griefing on a node that still counts replacements, but withdrawals stall when the base fee passes the ceiling. See the [analysis](docs/reputation-analysis.md#the-optional-fee-bump-limit).
 
 ## Gas
-A withdrawal to a fresh wallet costs about 950,000 gas, of which **253,176** is verification. Full figures: [docs/gas-report.md](docs/gas-report.md).
+A withdrawal to a fresh wallet costs about 900,000 gas, of which **253,176** is verification. Proving takes about 2 s on a laptop. Full figures: [docs/gas-report.md](docs/gas-report.md).
 
 ## Prior work
 - [EIP-8141 and minimum required validation budget for privacy applications](https://ethresear.ch/t/eip-8141-and-minimum-required-validation-budget-for-privacy-applications/25889) (mmjahanara): the gas floor and optimizations.
