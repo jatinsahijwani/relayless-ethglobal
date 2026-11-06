@@ -148,6 +148,12 @@ importers:
         specifier: ^2.57.7
         version: 2.57.16(typescript@5.9.3)
 
+  packages/ens:
+    devDependencies:
+      forge-std:
+        specifier: https://github.com/foundry-rs/forge-std/archive/refs/tags/v1.9.4.tar.gz
+        version: https://github.com/foundry-rs/forge-std/archive/refs/tags/v1.9.4.tar.gz
+
   packages/sdk:
     dependencies:
       '@forshtat/hegota-support':

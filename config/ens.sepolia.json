@@ -1,0 +1,39 @@
+{
+  "chainId": 11155111,
+  "rpc": "https://gateway.tenderly.co/public/sepolia",
+  "logSpan": 9000,
+  "explorer": "https://sepolia.etherscan.io",
+  "contracts": {
+    "ethRegistry": "0xd4ebcbbdf463c9c45784603db0ddd499bc44a8b4",
+    "ethRegistrar": "0xf633e7fc17e2bbe0d0965d18ec1821dcb754a3d3",
+    "universalResolver": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+    "verifiableFactory": "0xda70306c98e97ece36f997a21368e53298572991",
+    "userRegistryImpl": "0x9bd8a88719068d09ecee662f36c0e3856708366a",
+    "permissionedResolverImpl": "0x115eb53f0c60696633855f90b138178fb40b2b2c",
+    "mockUsdc": "0x240b0316df57887dbbe58b586508b19e633a14aa"
+  },
+  "names": {
+    "parentLabel": "relayless",
+    "parent": "relayless.eth",
+    "directoryLabel": "asp",
+    "directory": "asp.relayless.eth",
+    "worldAspLabel": "world"
+  },
+  "durations": {
+    "parentSeconds": 157680000,
+    "aspSeconds": 31536000
+  },
+  "recordKeys": {
+    "aspRoot": "asp.root",
+    "aspSlot": "asp.slot",
+    "aspPolicy": "asp.policy",
+    "aspChainId": "asp.chainId",
+    "aspPool": "asp.pool",
+    "aspOperator": "asp.operator",
+    "aspEndpoint": "asp.endpoint",
+    "stealthMetaAddress": "stealth-meta-address"
+  },
+  "aspSaltPreimage": "relayless.asp",
+  "deployBlock": null,
+  "claimer": null
+}
