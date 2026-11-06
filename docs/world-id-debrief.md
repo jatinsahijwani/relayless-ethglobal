@@ -1,6 +1,6 @@
 # World ID integration debrief
 
-*Template. Fill in the blanks after the first real verification, using what actually happened. Don't submit it with blanks.*
+*Fill in the remaining blanks before submitting. Tested against World's staging service with the simulator; update this after any production run.*
 
 ## The product event that needs trust
 A deposit leaving a privacy pool privately. The association set exists so the pool can show that its private withdrawals come from accountable participants, without knowing who sent what.
@@ -27,8 +27,11 @@ Cancelling, having no credential, being rejected, or reusing a World ID leaves t
 
 **Friction encountered:**
 - ____
-- From building against the SDK before first run: docs and types differ on `signal_hash` for 4.0 proofs (the type marks it optional), so binding a proof to a signal needed care. *Confirm this after a real run, or remove it.*
-- From building: the integration needs `app_id`, `rp_id` and a signing key, not just an app ID. *Confirm whether this caused real friction, or remove it.*
+- The integration needs `app_id`, `rp_id` and a signing key, not just an app ID.
+- The simulator's Cancel doesn't reach the app. The window waits on "Connecting…" until it's closed, so an app can't show a cancelled state from it, and closing the window had to be handled separately.
+- The simulator has one fixed identity, so testing a second user or a rejection means clearing our own nullifier records first.
+- The widget stays open after our server refuses a proof, so the user has to close it to continue.
+- `signal_hash` is optional in the SDK's types, so binding a proof to a signal needs an explicit server check.
 
 **Missing capabilities or documentation:**
 - ____

@@ -12,7 +12,7 @@ Privacy pools with no relayer have been prototyped. This is the layer that makes
 - **Withdrawals don't wait for each other.** Each one has its own nullifier as its nonce key, and validation reads no storage. So one pool can serve many users at the same moment.
 - **See how hidden you are.** Every deposit is drawn as a dot, sized by how suspicious it looks from outside. You get min-entropy and Shannon scores, plus advice you can act on: wait, split, or change the amount. It's an explicit model, not a guarantee.
 - **Enforce it if you want.** Require at least *k* notes after yours, checked inside the proof.
-- **Compliance path.** An optional association set: only approved deposits withdraw privately, and anyone else can always exit publicly to the wallet that deposited. *The set and the exit work locally. World ID is built but hasn't verified a real proof yet, and ENSv2 isn't started.*
+- **Compliance path.** An optional association set: only approved deposits withdraw privately, and anyone else can always exit publicly to the wallet that deposited. *The set, the exit and World ID work locally against World's staging service. ENSv2 isn't started.*
 
 ## Findings for the alt mempool
 Building a pool where every user shares one sender surfaced these, each reproducible:
@@ -118,7 +118,7 @@ CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|r
 - **Not audited.** Groth16 isn't post-quantum. Trusted setup is devnet-grade.
 - **Withdrawals need the pool to be staked** under the ERC draft's budgets, and the stake can't be withdrawn.
 - **A banned pool blocks everyone at that node**, including public exits, until `seen` decays or you use another node.
-- **World ID is built but hasn't verified a real proof:** it needs an app's credentials. Its tests fake World's verdict. ENSv2, pay-to-ENS and Anon-RPC aren't integrated.
+- **World ID is tested on staging only,** with World's simulator. Production, with a real World App, isn't tested. ENSv2, pay-to-ENS and Anon-RPC aren't integrated.
 - Proving hasn't been timed on a phone.
 
 ## Options

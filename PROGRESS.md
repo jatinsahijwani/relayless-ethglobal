@@ -10,7 +10,7 @@ Local stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.pat
 | 2: product core | Done | Recovery, partial and split payments, 3+ pending at once, web app in phone-size Chrome |
 | 3: anonymity | Done except Anon-RPC | Meter, k-gate in circuit and UI, comparison view |
 | 4: polish | Mostly done | README, CROPS, threat model, demo script, license, one-command setup. Demo video and GIF not made |
-| 5: compliance | Partly done | Association set, public exit and World ID path work locally. **World has never verified a real proof here.** ENSv2 not started |
+| 5: compliance | Partly done | Association set, public exit and World ID work locally, verified by World's **staging** service. Production not tested. ENSv2 not started |
 
 ## Test results
 Last full run: a fresh `git clone`, empty stack directory, `scripts/local-stack.sh`, then every suite on that chain.
@@ -20,15 +20,28 @@ Last full run: a fresh `git clone`, empty stack directory, `scripts/local-stack.
 | `scripts/local-stack.sh` from a fresh clone | Passed in about 13 minutes |
 | `scripts/e2e.ts` | 29/29 |
 | `scripts/e2e-asp.ts` | 7/7 |
-| `scripts/e2e-world.ts` (**World's verdict faked**) | 7/7 |
+| `scripts/e2e-world.ts` (World's verdict faked) | 7/7 |
 | Browser run, 390px Chrome | Full flow; no errors, no outside hosts, no horizontal overflow |
 | Circuits | 13/13 |
 | Contracts (Foundry, including fuzz) | 26/26 |
-| SDK | 16/16 |
+| SDK | 18/18 |
 | ASP server | 17/17 |
 | Sidecar: mempool, validation and `eth` suites only | 213/213 |
 
 With the optional fee-bump limit on, `scripts/e2e.ts` last passed 30/30, on an earlier run.
+
+## World ID against the real staging service
+Browser, real World proofs through the simulator, on the local chain:
+
+| Path | Result |
+|---|---|
+| Verified | `POST /join` 200, approved root published, private payment landed |
+| Invalid proof | World rejected it: `POST /join` 400, nothing approved, payment stayed refused |
+| Same World ID, second wallet | `POST /join` 409, refused |
+| Window closed, or cancelled then closed | "You cancelled", public exit offered, retry works |
+| Never approved | Private payment refused; public exit returned the money to the depositor |
+
+The app contacted no outside host until Verify was clicked. **Not tested:** production, or a real World App.
 
 ## Griefing, measured
 | Experiment | Result |
@@ -47,11 +60,8 @@ Main e2e pool, settled: `seen 12, included 11`. **The gap of 1 is unexplained.**
 
 **Withdrawals have no public link.** The public gateway refuses them (`docs/repro-gateway.md`), and our chains are private. A real one from the last run, on a chain you can recreate with `scripts/local-stack.sh`: `0x2abddb9619581975ce02e6cfc95a83140897e0970e265d96abb74be9b65452ad`.
 
-## Inputs needed
-- For World ID: `WORLD_APP_ID`, `WORLD_RP_ID`, `WORLD_SIGNING_KEY`. Steps: `docs/world-id-setup.md`.
-
 ## Still to do
-- First real World ID verification, each alternative path against it, then fill in `docs/world-id-debrief.md`.
+- World ID in production with a real World App, if it's part of the demo. Fill in the blanks in `docs/world-id-debrief.md`.
 - Demo video and GIF.
 - Test a real browser wallet: only the test wallet has been exercised.
 - Time proving on a real phone.

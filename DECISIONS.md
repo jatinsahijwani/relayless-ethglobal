@@ -36,7 +36,7 @@ ERC-8421's REPUTATION-040 says a replacement isn't a new `seen`, and the authors
 ethrex lost the number lookup for a run of blocks on 2 of 2 fresh chains, which breaks any `eth_getLogs` touching them. The SDK splits the range around such blocks. If a gap hid a pool leaf, reads fail with a clear error rather than building a wrong tree, and the root check stays as a second guard.
 
 ## World ID: Orb-level proof of a unique human
-The association set needs "one person, once", and nothing about who. Each proof is bound to its depositor, one nullifier maps to one address, and the depositor must sign. World's API only checks validity, so those live on our server, and the circuit enforces membership. It sits behind an env check and stays off until configured. Why this credential: `docs/world-id-debrief.md`.
+The association set needs "one person, once", and nothing about who. Each proof is bound to its depositor, one nullifier maps to one address, and the depositor must sign. World's API only checks validity, so those live on our server, and the circuit enforces membership. It stays off until configured. Why this credential: `docs/world-id-debrief.md`.
 
 ## Fee-bump limit is optional and off by default
 Measured: the sidecar counts each replacement as `seen`, and a note could make about 248 of them. A fixed max-fee range in the validator limits that (1–8 gwei gives about 22). The authors confirmed the counting is a prototype bug, not ERC-8421 behaviour, so a permanent liveness cost isn't worth it: with the range on, all withdrawals stall if the base fee passes the ceiling. Enable with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` at validator build time, and the SDK reads it from the deployed config. The checks aren't in the bytecode when it's off.
