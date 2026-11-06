@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import type { Session } from "../App";
 import { Button, Problem, Screen, plainError } from "../ui";
 import { cfg } from "../config";
@@ -36,6 +36,16 @@ export function Approve({ s }: { s: Session }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Whether this attempt has already ended in an answer, so closing the window afterward says nothing more.
+  const settled = useRef(false);
+
+  const closed = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen && !settled.current) {
+      settled.current = true;
+      setError(worldErrorMessage("cancelled"));
+    }
+  };
 
   const checkApproved = async () => {
     const res = await fetch(`${cfg.aspUrl}/set`);
@@ -59,6 +69,7 @@ export function Approve({ s }: { s: Session }) {
       // Loaded only here, so nothing talks to World until the user asks.
       const idkit = await import("@worldcoin/idkit");
       setWidget({ Widget: idkit.IDKitRequestWidget as ComponentType<any>, preset: idkit.orbLegacy({ signal: s.signer.address }) });
+      settled.current = false;
       setOpen(true);
     } catch (e) { setError(plainError(e)); } finally { setBusy(false); }
   };
@@ -69,6 +80,7 @@ export function Approve({ s }: { s: Session }) {
     const message = `Join the Relayless approved set for pool ${cfg.pool.toLowerCase()} as ${s.signer.address.toLowerCase()}`;
     const signature = await s.signer.signMessage(message);
     const res = await fetch(`${cfg.aspUrl}/join`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ depositor: s.signer.address, signature, result }) });
+    settled.current = true;
     if (!res.ok) {
       const message = (await res.json()).message as string;
       setError(message);
@@ -97,7 +109,7 @@ export function Approve({ s }: { s: Session }) {
       {widget && config?.app_id && rpContext && (
         <widget.Widget
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={closed}
           app_id={config.app_id}
           action={config.action}
           rp_context={rpContext}
@@ -106,7 +118,10 @@ export function Approve({ s }: { s: Session }) {
           environment={config.environment}
           handleVerify={verifyOnServer}
           onSuccess={() => { setApproved(true); s.refresh().catch(() => {}); }}
-          onError={(code: string) => setError((current) => current || worldErrorMessage(code))}
+          onError={(code: string) => {
+            settled.current = true;
+            setError((current) => current || worldErrorMessage(code));
+          }}
         />
       )}
     </Screen>

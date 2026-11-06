@@ -18,3 +18,4 @@ apps/web/public/circuits/
 .relayless-e2e-*.json
 config/*.deployed.json
 packages/contracts/generated/
+.asp.log
