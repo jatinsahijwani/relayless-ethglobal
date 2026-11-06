@@ -9,7 +9,7 @@
     "dev": "pnpm circuits && vite",
     "build": "pnpm circuits && vite build",
     "dev:ens": "vite --config vite.ens.config.ts --port 5198 --open /ens.html",
-    "build:ens": "vite build --config vite.ens.config.ts && mv dist-ens/ens.html dist-ens/index.html"
+    "build:ens": "vite build --config vite.ens.config.ts && mv dist-ens/ens.html dist-ens/index.html && cp vercel.ens.json dist-ens/vercel.json"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.1.0",

@@ -16,6 +16,7 @@ export function EnsApp() {
       <header className="mb-6">
         <span className="font-display text-xl font-bold">Relayless</span>
         <span className="ml-2 text-slate">on ENSv2, Sepolia</span>
+        <a href="/findings" className="ml-3 text-slate underline underline-offset-4">Findings</a>
         <p className="mt-2 max-w-2xl text-slate">ENS as the directory of a privacy pool. This page reads Sepolia {nymRequested ? "through the mixnet" : "directly"} from your browser. The pool itself runs on a local devnet.</p>
       </header>
       <NymToggle />
