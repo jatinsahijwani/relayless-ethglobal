@@ -1,50 +1,68 @@
 # Progress
 
-## What works (local stack only)
-Local stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config.
+## What works
+Local stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. The alt mempool authors confirmed a local sidecar is fine for judging.
 
 | Phase | Status | Evidence |
 |---|---|---|
-| 0: prove the path | Done | Workshop steps 1–13 pass on the public devnet. Combined key-and-root tx mined, public block 401126: `0x6f39d1fe8c3828025fe8f21baf3ac012acedc6a2d7b87371eae9f54d62ccef99` |
-| 1: minimal withdrawal | **Done locally** (authors confirmed a local sidecar is fine for judging) | Withdrawal mined from the staked pool to a 0-ETH address. Double spend invalid. Canonical mempool rejects it, patched alt mempool admits it. `docs/gas-report.md` |
+| 0: prove the path | Done | All 13 workshop steps pass on the public devnet |
+| 1: minimal withdrawal | Done locally | Mined from the staked pool to a 0-ETH address. Double spend invalid. Canonical mempool rejects it, patched alt mempool admits it. `docs/gas-report.md` |
 | 2: product core | Done | Recovery, partial and split payments, 3+ pending at once, web app in phone-size Chrome |
 | 3: anonymity | Done except Anon-RPC | Meter, k-gate in circuit and UI, comparison view |
-| 4: polish | Mostly done | README, CROPS, threat model, demo script, license. See "Still to do" |
-| 5: compliance | **Partly done** | Association set and public exit work locally. World ID and ENSv2 not started |
+| 4: polish | Mostly done | README, CROPS, threat model, demo script, license, one-command setup. Demo video and GIF not made |
+| 5: compliance | Partly done | Association set, public exit and World ID path work locally. **World has never verified a real proof here.** ENSv2 not started |
 
-## Author feedback applied
-All six items are done. See the table in `DECISIONS.md`, and `docs/reputation-analysis.md`.
+## Test results
+Last full run: a fresh `git clone`, empty stack directory, `scripts/local-stack.sh`, then every suite on that chain.
 
-## Test results (last run)
 | Suite | Result |
 |---|---|
+| `scripts/local-stack.sh` from a fresh clone | Passed in about 13 minutes |
+| `scripts/e2e.ts` | 29/29 |
+| `scripts/e2e-asp.ts` | 7/7 |
+| `scripts/e2e-world.ts` (**World's verdict faked**) | 7/7 |
+| Browser run, 390px Chrome | Full flow; no errors, no outside hosts, no horizontal overflow |
 | Circuits | 13/13 |
 | Contracts (Foundry, including fuzz) | 26/26 |
-| SDK units | 13/13 |
-| `scripts/e2e.ts`, local | 30/30 |
-| `scripts/e2e-asp.ts`, local | 7/7 |
-| Sidecar patch, 5 affected test files only | 138/138 |
-| Browser run, 390px Chrome | Full flow; no errors, no outside hosts, no horizontal overflow |
+| SDK | 16/16 |
+| ASP server | 17/17 |
+| Sidecar: mempool, validation and `eth` suites only | 213/213 |
 
-Local tx hashes aren't linkable because the chain is private. Last headline tx: `0x59868786ee22c0f6e449680abd79ab21f5a1f68538f757366b06269f6ff23f3a`.
+With the optional fee-bump limit on, `scripts/e2e.ts` last passed 30/30, on an earlier run.
 
-## Public gateway
-**Not a blocker for judging:** the alt mempool authors confirmed a local sidecar is fine. The public gateway still can't admit a withdrawal, so there's no public explorer link for one. Reproduction: `docs/repro-gateway.md`.
+## Griefing, measured
+| Experiment | Result |
+|---|---|
+| 8 fee bumps from one note, before our fix | `seen` 0 → 8, `included` 1 |
+| Same, after our fix | `seen` 0 → 1, `included` 1 |
+| Same note sent to two nodes, 2 notes, after our fix | Non-mining node: `seen 2, included 0`. **Still open** |
+
+Main e2e pool, settled: `seen 12, included 11`. **The gap of 1 is unexplained.** The run includes a deliberate fee bump, which may be why.
+
+## Links
+**Public devnet** ([explorer](https://explorer.altmempool.wtf/): search by hash, and its history is in memory, so these can disappear):
+- Contract sender with a nonce key and a root reference, block 401126: `0x6f39d1fe8c3828025fe8f21baf3ac012acedc6a2d7b87371eae9f54d62ccef99`
+- Keyed nonces, workshop step 12: `0x8fc566abddd6a77a4dc6fd26eb31285c44eabb4d0df4851495fd7108ea0d2acd`
+- Recent root reference, workshop step 13: `0x8eb575751505fdc906729eeefbf0657da34a9aad618afaa76d0f3a291cf2377e`
+
+**Withdrawals have no public link.** The public gateway refuses them (`docs/repro-gateway.md`), and our chains are private. A real one from the last run, on a chain you can recreate with `scripts/local-stack.sh`: `0x2abddb9619581975ce02e6cfc95a83140897e0970e265d96abb74be9b65452ad`.
+
+## Inputs needed
+- For World ID: `WORLD_APP_ID`, `WORLD_RP_ID`, `WORLD_SIGNING_KEY`. Steps: `docs/world-id-setup.md`.
 
 ## Still to do
-**Inputs needed:**
-- For Phase 5: a World ID app ID, and an ENS name plus Sepolia ETH.
-
-**Work remaining:**
-- World ID and ENSv2 integration, and pay-to-ENS, once the above arrive.
-- Run `scripts/local-stack.sh` from scratch. **Never run end to end.** Its parts were each run by hand, but "one-command setup" is unproven until this passes.
-- Demo GIF and the 3-minute video.
-- Anon-RPC: docs list no devnet support, so this is probably a documented gap.
-- Time proving on a real phone. Test a real browser wallet: only the test wallet was exercised.
+- First real World ID verification, each alternative path against it, then fill in `docs/world-id-debrief.md`.
+- Demo video and GIF.
+- Test a real browser wallet: only the test wallet has been exercised.
+- Time proving on a real phone.
 - Decide the final license, given GPL-3.0 dependencies (`NOTICE.md`).
+- Anon-RPC: docs list no devnet support, so this is probably a documented gap.
+- ENSv2 and pay-to-ENS: not started, on hold.
 
 ## Known issues
-- `docs/research-notes.md` describes the Phase 0 state, so its gas numbers are for the spike circuit.
-- Griefing is bounded, not solved. Throttle and ban thresholds were calculated, not reached in a run.
+- **ethrex loses block numbers.** On 2 of 2 fresh chains, blocks from about 149 lost their number lookup, about 15 minutes after genesis. Cause unknown. The SDK reads around it and fails loudly if a gap hid pool data. Written up in `docs/upstream-pr.md`.
+- **Unexplained, seen once:** on one chain, large deployments stopped mining while small transactions kept going. That chain also held a stale transaction from a nonce race, since fixed. A fresh chain past its hole deployed normally in 24 s, so the hole isn't the cause. If deploys hang, start a fresh chain.
+- A young chain can briefly report a root as not yet referenceable. The SDK retries before broadcasting.
+- Griefing across nodes is limited, not solved. Throttle and ban thresholds were calculated, not reached in a run.
 - Same seed on two devices can still race on one note.
-- The circuit keys were regenerated after the end-to-end and browser runs above, so those need repeating on a fresh deployment.
+- `docs/research-notes.md` describes the Phase 0 state, so its gas numbers are for the spike circuit.
