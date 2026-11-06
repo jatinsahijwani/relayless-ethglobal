@@ -44,17 +44,31 @@ Browser, real World proofs through the simulator, on the local chain:
 The app contacted no outside host until Verify was clicked. **Not tested:** production, or a real World App.
 
 ## ENSv2
-Code complete on the `ensv2` branch. **Rehearsed on a fork of Sepolia, not yet deployed to Sepolia:** waiting for Sepolia ETH.
+**Deployed to Sepolia.** Live demo: https://relayless-ens.vercel.app. Addresses and a command to check the role limits are in the [README](README.md#ensv2).
 
 | Check | Result |
 |---|---|
+| `scripts/e2e-ens.ts`: real Sepolia plus the live devnet | 48/48 |
 | Foundry, on forked Sepolia with the deployed ENSv2 contracts | 16/16 |
 | SDK | 38/38 |
 | ASP server | 23/23 |
-| `scripts/ens/rehearse.sh`: full setup and `scripts/e2e-ens.ts`, on a Sepolia fork plus the live devnet | All passed |
-| Browser at 390px, on a Sepolia fork: browse ASPs, roles, derive, claim with an injected wallet | No errors, no overflow, no outside hosts |
+| `scripts/e2e.ts`: existing pool on the running chain, after the ENS work | 29/29 |
+| Live link at 390px, logged out: browse ASPs, roles, look up `alice`, derive twice, bad names | No overflow. Only the page and the Sepolia RPC contacted. Console shows the RPC's 429s, which retry |
+| Local app at 390px: verdicts on real records | `world` and `allowlist` checked, `forged-demo` warned |
+| World ID ASP server restarted with a stale record | [Published by itself](https://sepolia.etherscan.io/tx/0x17d50267d237591b0aeefde7df44086601c24440e9b8178454c47c9ec378ea00) |
+| Approving a depositor on the second ASP | [Published by itself](https://sepolia.etherscan.io/tx/0x5320d9afd562ba5713c9cfe174d00b290e2637234008596ada4e31e6f34a071a) |
 
-**Not tested yet:** real Sepolia, the live link, a real browser wallet (an injected test wallet stood in), the running World ID server publishing to ENS (the same code ran on the second ASP), and the private payment and scan through the browser screens (the e2e script covers those paths).
+Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd8da7a14f61c6e90709a638b435cf15547ea8ea26d4db37f1b7a08b10a9aaed4), [register `asp`](https://sepolia.etherscan.io/tx/0x498e39e8242fbd46f10d7f54dc6fd5dad48eb45911c3929387aa2c7f90be0d2e), [register `world`](https://sepolia.etherscan.io/tx/0x831d30c21853fda6c58890526bf6550a69169dc709a2d0b23619389e7016c42c), [operator role and records](https://sepolia.etherscan.io/tx/0x77a66869be169e3c0de0344901a9862d5588e4dc08d898ba2e983fd758ad2db5).
+
+Gas was about 18 wei, so the whole deployment and test run used under 0.000001 ETH. Almost all of the 0.499 ETH is still in the throwaway keys.
+
+**Not tested yet:**
+- A real browser wallet: an injected test wallet stood in, on a fork.
+- Claiming through the live page on real Sepolia: the e2e script claimed through the same SDK call.
+- The World ID ASP publishing after a real World ID approval: the restart above and the second ASP's approval use the same publisher.
+- The private payment and scan through the browser screens: the e2e script covers those paths.
+- `/join` in the browser after the ENS work: `scripts/e2e.ts` covers the pool, not the World ID screen.
+- ENSIP-26 agent records: not added.
 
 ## Griefing, measured
 | Experiment | Result |
@@ -79,7 +93,7 @@ Main e2e pool, settled: `seen 12, included 11`. **The gap of 1 is unexplained.**
 - Test a real browser wallet: only the test wallet has been exercised.
 - Time proving on a real phone.
 - Anon-RPC: docs list no devnet support, so this is probably a documented gap.
-- ENSv2: deploy to Sepolia, publish the live link, and revoke the last parent role.
+- ENSv2: revoke the last parent role. It is permanent, so it waits for the author's decision.
 
 ## Known issues
 - **ethrex loses block numbers.** On 2 of 2 fresh chains, blocks from about 149 lost their number lookup, about 15 minutes after genesis. Cause unknown. The SDK reads around it and fails loudly if a gap hid pool data. Written up in `docs/upstream-pr.md`.

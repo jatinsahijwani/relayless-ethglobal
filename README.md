@@ -97,6 +97,57 @@ const a = await rl.anonymity({ amount }); // { minEntropyBits, shannonBits, setS
 
 CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|ragequit`
 
+## ENSv2
+ENS is how you find out who approves deposits, and how you pay someone without exposing where their money lands. Both run on the ENSv2 contracts on Sepolia. The pool stays on the local devnet.
+
+**Live demo: https://relayless-ens.vercel.app.** It reads Sepolia directly from your browser, with no server of ours. Browse the ASPs, see who holds which role, look up `alice.relayless.eth` and derive stealth addresses. Pool steps say they run on the local devnet.
+
+**Check it yourself.** The curator tries to edit the World ID ASP's root, and the resolver refuses with `EACUnauthorizedAccountRoles` (`0x4b27a133`):
+```
+cast call --rpc-url https://ethereum-sepolia-rpc.publicnode.com 0x335dd5348EbEA119DB2644831801C290ECF0B4e7 \
+  "setText(bytes,string,string)" 0x05776f726c64036173700972656c61796c6573730365746800 asp.root 0xdead \
+  --from 0x04f1D2215933f26f07c343511a7E05717273e6BE
+```
+Change `--from` to the operator, `0xd5cf58D5718c9A7308371913f62096E005AF450D`, and it succeeds. Keep the operator and change `asp.root` to `asp.pool`, and it reverts again.
+
+### ASP directory
+- **Permissioned Registry:** `asp.relayless.eth` has its own registry. Each ASP is a subname of it, such as `world.asp.relayless.eth`. The app lists ASPs from that registry's `LabelRegistered` events, with no list in the code.
+- **Permissioned Resolver:** each ASP has its own, holding the root, slot, policy, chain, pool, operator and approval endpoint.
+- **EAC:** the operator key can edit only `asp.root`, `asp.slot` and `asp.policy`. The curator can't edit any record.
+- **Publishing:** the World ID ASP's server publishes its root when the approved set changes, and on its 6-hour refresh, because a referenced root expires after about 13.6 hours. A Sepolia failure never blocks a join.
+- **Cross-check:** ENS is the directory and the pool's chain is the truth. The SDK reads the root from the chain's recent-root predeploy, and warns if ENS disagrees or if the pool takes roots from a different operator. `forged-demo.asp.relayless.eth` is deliberately wrong, to show that warning.
+
+### Private receive names
+- **Claim:** `RelaylessNameClaimer` registers `alice.relayless.eth` directly to the recipient, as a name that never expires, with no server involved.
+- **Record:** the name's own resolver holds a stealth meta-address in the `stealth-meta-address` text record (ERC-5564 scheme 1).
+- **EAC:** an app key can edit only that record. It can't edit other records, set an address, repoint the name or pass its role on.
+- **Paying:** the payer derives a new one-time address, and the pool pays it. A fresh wallet funded by a pool withdrawal publishes the announcement first, so a payment can't arrive unfindable. The recipient scans with a viewing key.
+
+### Design choices
+- **No rotating `addr`.** Anyone could read each `addr` value from chain history and link every address the name ever used. A meta-address gives only the payer each one-time address, and it never appears in ENS.
+- **Subname rules.** ASP names expire after a year, can't be transferred, and can't be pulled early by the curator. A bad ASP can only over-approve or withhold, public exit stays open, and slow visible removal is enough. Receive names never expire and belong to the recipient. Reasons are in [DECISIONS.md](DECISIONS.md).
+- **No wildcards or aliasing.** A wildcard can't list names, and the point of the directory is that it can be listed. Every name here is a real entry with its own roles.
+
+### Why ENS is central
+Without ENS there's no way to find an ASP, nothing that shows who may change its record, and no way to pay a name privately. The role limits are enforced by the ENSv2 contracts, not by this app.
+
+### On Sepolia
+| What | Name | Address |
+|---|---|---|
+| Parent registry | `relayless.eth` | [`0xa301…87F2`](https://sepolia.etherscan.io/address/0xa30168D50Dfa55C2bCe1ed726F86eAFeA3Af87F2) |
+| Directory registry | `asp.relayless.eth` | [`0x1511…033F`](https://sepolia.etherscan.io/address/0x1511b0aF97942f939b4F7369b016fAc70ee6033F) |
+| World ID ASP resolver | `world.asp.relayless.eth` | [`0x335d…B4e7`](https://sepolia.etherscan.io/address/0x335dd5348EbEA119DB2644831801C290ECF0B4e7) |
+| Allowlist ASP resolver | `allowlist.asp.relayless.eth` | [`0x891e…B27E`](https://sepolia.etherscan.io/address/0x891eE68599a0fCcFF956Ee07eB14417255c0B27E) |
+| Forged demo resolver | `forged-demo.asp.relayless.eth` | [`0xc30b…1c07`](https://sepolia.etherscan.io/address/0xc30b6a4eA7c8b0E81e0D9Cc45F0A2D7fEcb21c07) |
+| Name claimer | | [`0x0a1f…d85b`](https://sepolia.etherscan.io/address/0x0a1f421cd39dd9015483d6c16aec6ffc819cd85b) |
+| Test receive name's resolver | `alice.relayless.eth` | [`0x287d…9217`](https://sepolia.etherscan.io/address/0x287d90766ACA7f41CF407994448c2Cd90A049217) |
+
+Both registries report `isEmancipated() == true`. Protocol addresses are in [config/ens.sepolia.json](config/ens.sepolia.json).
+
+**Current limit:** the deployer still holds the subregistry role on `relayless.eth` and on `asp`, so it could replace everything beneath them. Removing that role is permanent and hasn't been done yet. Until then, "the parent can't change the root" holds for the current registries, not for a swap of them.
+
+**The approval endpoint** in the ASP records is `http://127.0.0.1:8790`, because the ASP server runs locally with the devnet.
+
 ## CROPS
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.
 - **O:** GPL-3.0, because circomlib's GPL-3.0 circuits are compiled into the project (see [NOTICE.md](NOTICE.md)). Builds and runs from this repo, using a patched third-party sidecar until the public gateway supports it.
