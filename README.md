@@ -2,7 +2,20 @@
 
 **Pay anyone privately, from a wallet with no history. No relayer. It tells you how hidden you are before you pay.**
 
-> **Status:** works end to end on a local devnet (ethrex `9aa3645d` plus a patched alt mempool sidecar), which the alt mempool authors confirmed is fine for judging. The public gateway can't admit these transactions yet: see [Findings](#findings-for-the-alt-mempool). Devnet only.
+- **What:** a privacy pool that pays gas from the note being withdrawn, so a brand-new wallet holding 0 ETH can receive money with nobody funding it, using EIP-8141 frame transactions and the alt mempool.
+- **See it:** [live ENS directory and private names](https://relayless-ens.vercel.app) (Sepolia, nothing to install), [findings](https://relayless-ens.vercel.app/findings), video: *link to be added*.
+- **Run it:** `scripts/local-stack.sh && pnpm web`, then open http://127.0.0.1:5199. See [Run it](#run-it).
+
+![A payment to a wallet holding 0 ETH](docs/img/demo.gif)
+
+| Part | What's real | Where it runs |
+|---|---|---|
+| Core: frame withdrawals, recovery, meter, k-gate | Works end to end, with 34 e2e checks | Local devnet: ethrex `9aa3645d` plus a patched sidecar, which the alt mempool authors confirmed is fine for judging. The public gateway can't admit these yet: see [Findings](#findings-for-the-alt-mempool) |
+| Association set and World ID | Works, verified by World's **staging** service with its simulator | Local devnet. Production and a real World App aren't tested |
+| ENSv2 directory and private names | Deployed | Sepolia, [live link](https://relayless-ens.vercel.app). Pool steps run on the devnet |
+| Nym mixnet | Optional, off by default, covers ENS reads only | Live link and local app. See [CROPS](#crops) |
+
+Devnet only. Not audited.
 
 ## What you get
 Privacy pools with no relayer have been prototyped. This is the layer that makes one usable:
@@ -45,20 +58,9 @@ The authors confirmed a local sidecar is fine for judging. Separately, ethrex lo
 ## How it works
 EIP-8141 frame transactions let the pool be the sender and pay gas from the note being withdrawn. A fresh wallet receives money without ever holding ETH.
 
-```mermaid
-sequenceDiagram
-    participant U as Your browser
-    participant M as Alt mempool
-    participant P as Pool (sender and payer)
-    participant R as Fresh wallet (0 ETH)
-    U->>U: Prove the note is yours (about 2 s)
-    U->>U: Simulate first: a failing tx is never sent
-    U->>M: Frame transaction
-    M->>P: Frame 0, VERIFY: check proof, APPROVE, consume nullifier
-    Note over M,P: About 253k gas. Reads no storage.
-    P->>R: Frame 1, SENDER: pay, add change note, publish root
-    P->>R: Frame 2, DEFAULT: refund unused fee
-```
+![Sequence of a payment](docs/img/sequence.png)
+
+![The three frames of a withdrawal](docs/img/frame-layout.png)
 
 | Mechanism | How |
 |---|---|
@@ -82,13 +84,30 @@ Everything binds to localhost, and the keys it creates are throwaway. It's safe 
 
 The association-set pool and World ID are optional: see [docs/world-id-setup.md](docs/world-id-setup.md).
 
+**Demo mode.** Open the app with `?demo=1` for the demo buttons and fewer raw addresses on screen. To prepare it on the second association-set pool (`scripts/ens/setup-second-pool.sh`), which is what the demo uses:
+
+```sh
+pnpm demo:asp                               # that pool's ASP, on 8791, in its own terminal
+pnpm demo:seed                              # demo data, see below
+pnpm demo:reset                             # a new wallet and fresh recipient, for each take
+RELAYLESS_NETWORK=local-asp2 pnpm web
+pnpm demo:prep                              # a green or red line for everything; --fix runs the safe fixes
+```
+
+**Demo data, clearly:** `demo:seed` makes 56 deposits from throwaway keys into that pool, so the meter and dot chart have a crowd. **Those dots are seed data, not users.** They and the demo wallet are approved directly by the operator of `allowlist.asp.relayless.eth`, which is that ASP's stated policy. They never enter the World ID ASP's set.
+
 Tests:
 
 ```sh
 pnpm test:circuits && pnpm test:contracts && pnpm test:sdk && pnpm test:asp
+(cd packages/ens && forge test)   # on forked Sepolia, against the deployed ENSv2 contracts
 set -a; . ./.env; set +a
 pnpm e2e                 # against the running stack
+npx tsx scripts/e2e-asp.ts && npx tsx scripts/e2e-world.ts
+npx tsx scripts/e2e-ens.ts       # real Sepolia transactions, from the throwaway keys
 ```
+
+Latest results are in [PROGRESS.md](PROGRESS.md).
 
 SDK:
 
@@ -192,6 +211,7 @@ Both registries report `isEmancipated() == true`. Protocol addresses are in [con
 - **World ID is tested on staging only,** with World's simulator. Production, with a real World App, isn't tested. Anon-RPC isn't integrated.
 - **ENS and the pool are on different chains,** so the static demo can't run the cross-check or a payment, and says so. A stealth payment costs about twice the gas of a normal one, because of its announcement.
 - Proving hasn't been timed on a phone.
+- **The demo's crowd is seed data,** and its wallet is approved by an operator, not World ID. See [Demo mode](#run-it).
 
 ## Options
 **Fee-bump limit, off by default.** Build the validator with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` to reject max fees outside a fixed range, which caps fee bumps per note. It limits griefing on a node that still counts replacements, but withdrawals stall when the base fee passes the ceiling. See the [analysis](docs/reputation-analysis.md#the-optional-fee-bump-limit).
@@ -206,8 +226,18 @@ A withdrawal to a fresh wallet costs about 900,000 gas, of which **253,176** is 
 - [Privacy Pools](https://github.com/0xbow-io/privacy-pools-core) (0xbow): circuits, association sets and ragequit, adapted with attribution.
 - [Alt mempool workshop and sidecar](https://github.com/forshtat/mempool-workshop) (forshtat), and direct feedback from the alt mempool authors.
 
+## Before vs during the hackathon
+All of this repository's code is in its git history, from the first commit, `aa797f7`, dated 2026-11-05 22:54 IST. Run `git log --date=iso` to see every step. `docs/research-notes.md` records the Phase 0 spikes of 2026-11-05, which were throwaway and kept outside this repo, so none of their code is here.
+
+| Dates in `git log` | What was committed |
+|---|---|
+| 2026-11-05 (11 commits, `aa797f7` to `f118a8c`) | Monorepo, circuits, pool and validator, SDK, local stack, e2e and CLI |
+| 2026-11-06 onward | Web app, association set and World ID, ENSv2, Nym, findings, demo aids and docs |
+
+Third-party work is listed under [Prior work](#prior-work) and [NOTICE.md](NOTICE.md).
+
 ## AI usage
 Claude Code was used for implementation, testing and documentation, under the author's direction. The ideas, steps and detailed specifications came from the author, who also designed, reviewed and validated the work.
 
 ## Docs
-[Reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [World ID setup](docs/world-id-setup.md), [gas report](docs/gas-report.md), [Nym notes](docs/nym-notes.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).
+[Submission](SUBMISSION.md), [code tour](docs/code-tour.md), [video shotlist](docs/video-shotlist.md), [reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [World ID setup](docs/world-id-setup.md), [gas report](docs/gas-report.md), [Nym notes](docs/nym-notes.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).

@@ -2,6 +2,14 @@
 
 Design choices and why. Newest context first where it matters.
 
+## Demo data lives under the allowlist ASP, never the World ID one
+`world.asp.relayless.eth` publicly says its members proved they're unique humans, so nothing else may enter its root. Seed deposits and demo notes need approving with no human present, so they use `allowlist.asp.relayless.eth`, whose stated policy is that its operator approves deposits. That's the only ASP with an `/allow` route, and the route needs the operator's signature. A server without `ASP_ALLOWLIST=1` doesn't offer it, so the World ID ASP has no such path.
+
+**Cost:** a demo on this pool doesn't show World ID. That segment runs against the World ID ASP's own pool.
+
+## The mempool comparison proves against placeholder limits
+The sidecar's `eth_estimateFrameTransactionGas` overwrites the limits of every frame after VERIFY with 10M. Those limits are part of sigHash, so a normal proof fails there with `validation frame 0: reverted`. The dry run proves for those limits and sends the same bytes to both nodes. VERIFY, which is what's being judged, is unchanged. Measured: neither call moves `seen` or records an admission.
+
 ## ENS is the directory, and the pool's chain is the truth
 ENS says which ASPs exist and what they claim. It can't approve anyone: the circuit checks membership against a root on the pool's chain. So a client tests each ENS root two ways, with no contract change and no server: the pool's immutable `ASP_SOURCE_ID` must match the named operator, and the recent-root predeploy must hold that root at that slot. The predeploy has no getter, but its storage layout is deterministic, so one `eth_getStorageAt` is enough. Measured on the running devnet: the real root matches, and a forged root or wrong slot fails.
 
