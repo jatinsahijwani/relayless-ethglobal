@@ -18,9 +18,11 @@
     "demo:asp": "scripts/demo-asp.sh",
     "demo:seed": "tsx scripts/demo-seed.ts",
     "demo:reset": "tsx scripts/demo-reset.ts",
-    "demo:prep": "scripts/demo-prep.sh"
+    "demo:prep": "scripts/demo-prep.sh",
+    "demo:gif": "node scripts/capture-gif.mjs"
   },
   "devDependencies": {
+    "playwright": "1.61.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "@types/node": "^22.0.0",
