@@ -104,17 +104,27 @@ Done on `refocus`, with the author's decisions: two profiles now (`devnet-8421`,
 - The unrelated Docker containers were stopped on the author's request (stopped, not removed). The Relayless devnet and its sidecar are still running, and so is the local `hegota-8141` node (`pkill -f 'ethrex.*hegota-stack'` stops it).
 - The old `packages/contracts/generated/validator.json` (git-ignored) is no longer read, and was left on disk.
 
-### Part 5: prepared, waiting for funds
-Everything up to spending is done and rehearsed. The sequence is in `docs/testnet-run.md`.
+### Part 5: deployed and exercised on chain 8141
+**5/5 on the public chain, 2026-11-16.** Pool `0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225`, validator `0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c`. Every transaction, with explorer links, is in the README's "Public testnet" section. The deployer was a throwaway key (`0x5D5d…5e61`, in git-ignored `.env.hegota-8141`) funded by the author from the faucet with 1 ETH.
+
+| Step | Result |
+|---|---|
+| Deposit | 5 × 0.02 ETH |
+| Private withdrawal to a fresh 0-ETH address | Received 0.014999 ETH. 941,778 gas, every frame succeeded. Gas on the public chain matches the local `hegota-8141` chain exactly for the root and VERIFY frames (5,579 and 233,383) |
+| Double spend | Refused before broadcast, on the nonce |
+| Concurrent withdrawals | 3 of 3 pending at once. Shows the relaxed per-sender rule; chain 8141 has no MATCHA width budget |
+| Ragequit | Paid the depositor |
+
+The sequence is in `docs/testnet-run.md`. What was prepared:
 
 | What | State |
 |---|---|
-| Network | Chain 8141: RPC `rpc1.privacy.ethrex.xyz` (open), explorer [Dora](https://dora.privacy.ethrex.xyz), faucet at faucet.privacy.ethrex.xyz (not used) |
+| Network | Chain 8141: RPC `rpc1.privacy.ethrex.xyz` (open), explorer [Dora](https://dora.privacy.ethrex.xyz), faucet at faucet.privacy.ethrex.xyz (the author claimed from it) |
 | Admission | Permissionless transactions, 500,000 verify budget, relaxed per-sender rule for disjoint keys, no MATCHA width budget |
-| `scripts/testnet-key.sh` | Fresh throwaway key in `.env.hegota-8141` (git-ignored). **Not created yet** |
+| `scripts/testnet-key.sh` | Fresh throwaway key in `.env.hegota-8141` (git-ignored) |
 | `scripts/testnet-preflight.ts` | **Passes against chain 8141**, read-only: chain id, client `64b8fc09`, recent-root code hash, nonce manager, slots, and our encoding decoded by the node |
 | `scripts/testnet-run.ts` | Deposit, private withdrawal to a 0-ETH address, double spend refused, concurrent withdrawals, ragequit. **Rehearsed 5/5 on the local `hegota-8141` chain** |
-| README "Public testnet" | Skeleton, to fill from the run's output |
+| README "Public testnet" | Filled from the run's output |
 | Funds needed | About 0.15 ETH on chain 8141 |
 
 ## Hackathon status (as judged)

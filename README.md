@@ -14,7 +14,7 @@
 |---|---|---|
 | Core: frame withdrawals, recovery, meter, k-gate | Works end to end on both spec profiles: 34 e2e checks on `devnet-8421`, 32 on `hegota-8141` | `devnet-8421`: ethrex `9aa3645d` plus a patched ERC-8421 sidecar (the alt mempool path). `hegota-8141`: a local chain on ethrex `64b8fc09`, the revision the public Hegotá testnet runs. See [Spec profiles](#spec-profiles) |
 | Association sets and public exit | Works with any provider through one SDK interface, with an allowlist ASP as the reference | Both profiles, locally. See [Association sets](#association-sets) |
-| Public testnet (chain 8141) | Deployment prepared, waiting for testnet funds | See [Public testnet](#public-testnet) |
+| Public testnet (chain 8141) | Deployed. Deposit, private withdrawal to a 0-ETH address, double spend refused, 3 concurrent withdrawals and a public exit all passed | See [Public testnet](#public-testnet) |
 
 Testnets and local chains only. Not audited.
 
@@ -154,20 +154,23 @@ A pool can require that a note's label is in an approved set before it leaves pr
 The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sepolia, private receive names, and an optional Nym route. They're in the tag `v1.0-ethglobal-mumbai`, and the Sepolia contracts stay deployed with their subregistry roles revoked.
 
 ## Public testnet
-*Not deployed yet: waiting for chain 8141 funds. This section is filled in once the run below is done.*
+**Deployed and exercised on 2026-11-16** on the Hegotá privacy testnet, chain 8141, run by the ethrex team: RPC `https://rpc1.privacy.ethrex.xyz`, explorer [dora.privacy.ethrex.xyz](https://dora.privacy.ethrex.xyz). The node runs ethrex `64b8fc09`, so the pool uses the `hegota-8141` profile. Withdrawals went to the chain's own public mempool: no alt mempool, no stake, no relayer.
 
-The Hegotá privacy testnet, chain 8141, run by the ethrex team: RPC `https://rpc1.privacy.ethrex.xyz`, explorer [dora.privacy.ethrex.xyz](https://dora.privacy.ethrex.xyz). The node runs ethrex `64b8fc09`, so the pool uses the `hegota-8141` profile.
-
-| Step | Transaction |
+| Contract | Address |
 |---|---|
-| Deploy: Poseidon T3, T4, validator, pool | pending |
-| Deposit | pending |
-| Private withdrawal to a fresh address holding 0 ETH | pending |
-| Double spend of the same note, refused before broadcast | pending (nothing is sent) |
-| Concurrent withdrawals from the one pool sender | pending |
-| Public exit (ragequit) to the depositor | pending |
+| RelaylessPool | [`0x6d58de3f…`](https://dora.privacy.ethrex.xyz/address/0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225) |
+| Validator (`hegota-8141`) | [`0x72fb50da…`](https://dora.privacy.ethrex.xyz/address/0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c) |
+| PoseidonT3 / T4 | [`0xd194af1a…`](https://dora.privacy.ethrex.xyz/address/0xd194af1a6891ec6f6e34c961ed2639b430c0ff84) / [`0x308c0bee…`](https://dora.privacy.ethrex.xyz/address/0x308c0bee488fa6be3b7ce828135999cf56a2f256) |
 
-The run sequence is in [docs/testnet-run.md](docs/testnet-run.md).
+| Step | Result | Transaction |
+|---|---|---|
+| Deposit | 5 notes of 0.02 ETH (first shown) | [`0x918de453…`](https://dora.privacy.ethrex.xyz/tx/0x918de453d28bd9b79a4d12235aa26a21c0e04d789f15b3b20fed448a9ea5175e) |
+| Private withdrawal to a fresh address holding 0 ETH | `0xF085…F3b7` went from 0 to 0.014999 ETH. 4 frames, all succeeded. 941,778 gas: root frame 5,579, pool VERIFY 233,383 + 97,920 state, SENDER 193,729 + 379,440 state, refund 9,967 | [`0x9671febc…`](https://dora.privacy.ethrex.xyz/tx/0x9671febcc7365da4f5761559979b6776e0271ff12efbb6e6eac7ba508ffc2ef4) |
+| Double spend of the same note | Refused by the node's simulation before broadcast: "Nonce mismatch: expected 1, got 0". Nothing was sent | none |
+| Concurrent withdrawals from the one pool sender | 3 of 3 pending at once, mined in blocks 851714, 851715, 851715. This chain relaxes one-pending-per-sender for disjoint nonce keys; it has no MATCHA width budget, so this isn't a MATCHA result | [`0x9a4f521d…`](https://dora.privacy.ethrex.xyz/tx/0x9a4f521d474c685cee9d02eaf254948e6a921806c398e4a1e9692093f3489ce1), [`0x0511e178…`](https://dora.privacy.ethrex.xyz/tx/0x0511e1786a9484325b565937815f5868d6e62731803dfb712eac839eb7f5a59a), [`0x9679fdd5…`](https://dora.privacy.ethrex.xyz/tx/0x9679fdd5303c63c614ce1d3dcb277a2ab453b1134f11c6b39a2de526097c6508) |
+| Public exit (ragequit) to the depositor | Paid the depositor, nullifier spent | [`0x12b5c7f7…`](https://dora.privacy.ethrex.xyz/tx/0x12b5c7f75cf85729adc4532f861497fb2ba9c1ad375bb80d4057ef6798b004e9) |
+
+The deployer was a throwaway key funded from the testnet faucet. How to rerun: [docs/testnet-run.md](docs/testnet-run.md). Raw results: `.relayless-testnet-hegota-8141.json`.
 
 ## CROPS
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.

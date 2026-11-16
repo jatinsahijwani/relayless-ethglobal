@@ -1,6 +1,6 @@
 # Public testnet run (chain 8141)
 
-The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: prepared and rehearsed, waiting for testnet funds.**
+The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: done on 2026-11-16, 5/5.** Results and explorer links are in the README's "Public testnet" section.
 
 ## The network
 | | |

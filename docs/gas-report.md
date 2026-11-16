@@ -7,7 +7,7 @@ Measured from receipts on two local chains, one per spec profile (see `docs/spec
 - **`devnet-8421`:** ethrex `9aa3645d` with the patched ERC-8421 sidecar (`scripts/local-stack.sh`). Regenerate with `pnpm e2e local`.
 - **`hegota-8141`:** ethrex `64b8fc09`, the revision chain 8141 runs, in dev mode with chain 8141's 500,000 verify budget (`scripts/local-stack-hegota.sh`). Regenerate with `pnpm e2e local-hegota`.
 
-Each run writes its figures to `.relayless-e2e-<network>.json`. **Not yet measured on the public chain 8141**, which needs funds (Part 5).
+Each run writes its figures to `.relayless-e2e-<network>.json`. **On the public chain 8141** (2026-11-16), a withdrawal to a fresh address used 941,778 gas: root frame 5,579, pool VERIFY 233,383 + 97,920 state, SENDER 193,729 + 379,440 state, refund 9,967. The root and VERIFY frames match the local `hegota-8141` chain exactly.
 
 ## A withdrawal
 | Part | `devnet-8421` | `hegota-8141` | Notes |
