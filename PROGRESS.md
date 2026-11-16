@@ -19,6 +19,40 @@ The positioning is `docs/landscape.md`. The hackathon version stays reachable at
 
 **Working setup:** the submitted repo is `relayless-ethglobal`, not the older `relayless` folder. GitHub is reached over HTTPS through `gh`, because a global `insteadOf` rule rewrites `https://github.com/` to SSH and no SSH key is loaded.
 
+### Part 2: remove ENS, World ID and Nym; make the association set provider-agnostic
+Done on `refocus`. Details and reasons are in `DECISIONS.md` under Stage 2.
+
+| What | State |
+|---|---|
+| ENS (`packages/ens`, screens, live-site build, Sepolia scripts and config) | Removed. Still in the tag. The local `apps/web/dist-ens` build output isn't in git, so it was left on disk |
+| Stealth payments (`stealth.ts`, `payStealth`, announcer) | Removed. Reasons in `DECISIONS.md` |
+| World ID (IDKit, `world.ts`, `/join`, env vars, docs) | Removed |
+| Nym (transport, toggle, notes) | Removed |
+| `AssociationSetProvider` in the SDK | Added: `sourceId`, `currentRoot`, `membershipProof`, `status`. Reference: `allowlistProvider` over `apps/asp`. Guide: `docs/association-sets.md` |
+| Ragequit and public exit | Unchanged, and passing in `e2e-asp` |
+| `pnpm typecheck`, `pnpm build` | New root scripts. Both clean |
+
+**Test results, 2026-11-16, on a fresh local stack** (ethrex `9aa3645d` plus the patched sidecar):
+
+| Suite | Result | Before |
+|---|---|---|
+| Circuits | 13/13 | 13/13 |
+| Contracts (Foundry, including fuzz) | 26/26 | 26/26 |
+| SDK | 29/29 | 43/43, of which 21 were ENS and stealth tests, now removed. 7 new recent-root and provider tests |
+| ASP server | 15/15 | 26/26, of which most were World ID and ENS tests. Rewritten for the allowlist, plus two HTTP tests against the SDK provider |
+| `scripts/e2e.ts` | 34/34 | 34/34 |
+| `scripts/e2e-asp.ts` | 10/10 | 7/7. The forgery check is now three, and a source and on-chain root check was added |
+| `pnpm typecheck` | clean | no such script |
+| `pnpm build` | clean (an existing chunk-size warning) | |
+
+**Live check of the reference ASP server:** `demo:reset` approved a wallet through `POST /allow`. The server published the root, and `demo-prep` confirmed it on the chain with the SDK's `checkRecentRoot` ("verified"). The new Get approved screen typechecks and builds, but **it hasn't been run in a browser.**
+
+**Removed suites,** still in the tag: `e2e-ens` (48), `e2e-world` (7), ENS Foundry (16).
+
+**Things I noticed:**
+- The ASP's state file is now keyed by pool address. The old one, `.relayless/asp-local-asp.json`, belonged to the previous chain's pool, and the server refused it. It's left in place.
+- Docker Desktop was started for the stack, and it restarted other containers on this machine (nitia, zebra-testnet, lightwalletd and others). They're still running.
+
 ## Hackathon status (as judged)
 
 Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. The alt mempool authors confirmed a local sidecar is fine for judging.
@@ -34,7 +68,7 @@ Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar wi
 | SENDER frame can't revert after APPROVE | Foundry fuzz and adversarial tests, `scripts/e2e.ts` |
 | Association set and public exit | `scripts/e2e-asp.ts` |
 | World ID, on **staging** with the simulator | [Below](#world-id-against-the-real-staging-service) |
-| ENSv2 directory and private names, on Sepolia | [Live page](https://relayless-ens.vercel.app), `scripts/e2e-ens.ts`, [addresses](README.md#on-sepolia) |
+| ENSv2 directory and private names, on Sepolia | [Live page](https://relayless-ens.vercel.app), `scripts/e2e-ens.ts`, [addresses](https://github.com/jatinsahijwani/relayless-ethglobal/blob/v1.0-ethglobal-mumbai/README.md#on-sepolia) |
 | Nym route for ENS reads, off by default | [Below](#nym-mixnet), [notes](docs/nym-notes.md) |
 | Findings, each reproducible | [Repro](docs/repro-gateway.md), [upstream write-up](docs/upstream-pr.md), [analysis](docs/reputation-analysis.md) |
 
