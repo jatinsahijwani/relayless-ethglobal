@@ -2,10 +2,12 @@ import { concat, keccak256, numberToHex, toHex, type Address, type Hex } from "v
 import { privateKeyToAccount } from "viem/accounts";
 import { fetchPoolState, rootOf } from "@relayless/sdk";
 import { nonceSettled, rpc } from "@relayless/sdk/chain";
+import { RECENT_ROOT_ADDRESS, sourceIdOf } from "@relayless/sdk/recent-root";
 import type { Chain } from "./asp.js";
 
 export const ASP_SALT = keccak256(toHex("relayless.asp"));
-const RECENT_ROOT: Address = "0x0000000000000000000000000000000000008272";
+/** The source id a pool names as its ASP_SOURCE_ID to accept roots from this key. */
+export const aspSourceOf = (writer: Address): Hex => sourceIdOf(writer, ASP_SALT);
 
 export function liveChain(cfg: { rpc: string; pool: Address; chainId: number }, aspKey: Hex): Chain {
   const account = privateKeyToAccount(aspKey);
@@ -17,7 +19,7 @@ export function liveChain(cfg: { rpc: string; pool: Address; chainId: number }, 
       const root = numberToHex(rootOf(labels), { size: 32 });
       const nonce = Number(await rpc(cfg.rpc, "eth_getTransactionCount", [account.address, "pending"]));
       const block = await rpc(cfg.rpc, "eth_getBlockByNumber", ["latest", false]);
-      const raw = await account.signTransaction({ chainId: cfg.chainId, nonce, to: RECENT_ROOT, data: concat([ASP_SALT, root]), gas: 400_000n, gasPrice: BigInt(block.baseFeePerGas) * 3n + 1000n, type: "legacy" });
+      const raw = await account.signTransaction({ chainId: cfg.chainId, nonce, to: RECENT_ROOT_ADDRESS, data: concat([ASP_SALT, root]), gas: 400_000n, gasPrice: BigInt(block.baseFeePerGas) * 3n + 1000n, type: "legacy" });
       const hash = await rpc<Hex>(cfg.rpc, "eth_sendRawTransaction", [raw]);
       let receipt: any = null;
       for (let i = 0; i < 90 && !receipt; i++) {
@@ -33,7 +35,7 @@ export function liveChain(cfg: { rpc: string; pool: Address; chainId: number }, 
         if (BigInt(head.slotNumber) > slot) break;
         await new Promise((r) => setTimeout(r, 1000));
       }
-      return { sourceId: keccak256(concat([account.address, ASP_SALT])), slot, root };
+      return { sourceId: aspSourceOf(account.address), slot, root };
     },
   };
 }
