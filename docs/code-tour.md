@@ -1,6 +1,6 @@
 # Code tour
 
-A withdrawal, file by file, then likely questions. Line numbers are for the tagged commit.
+A withdrawal, file by file, then likely questions. Line numbers are for the tag `v1.0-ethglobal-mumbai`.
 
 ## The withdrawal path
 | Step | Where | Point at |

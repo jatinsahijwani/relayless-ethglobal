@@ -2,43 +2,41 @@
 
 Design choices and why. Newest context first where it matters.
 
-## Demo data lives under the allowlist ASP, never the World ID one
-`world.asp.relayless.eth` publicly says its members proved they're unique humans, so nothing else may enter its root. Seed deposits and demo notes need approving with no human present, so they use `allowlist.asp.relayless.eth`, whose stated policy is that its operator approves deposits. That's the only ASP with an `/allow` route, and the route needs the operator's signature. A server without `ASP_ALLOWLIST=1` doesn't offer it, so the World ID ASP has no such path.
+## Stage 2 (2026-11-16): the core is the pool, the alt mempool path and a provider-agnostic association set
+The positioning is `docs/landscape.md`: the pool primitive isn't novel, so the core keeps what is ours (the ERC-8421 path, shared-sender reputation, compliance, the SDK) and drops what's not research. Everything removed is in the tag `v1.0-ethglobal-mumbai`.
 
-**Cost:** a demo on this pool doesn't show World ID. That segment runs against the World ID ASP's own pool.
+### Removed: World ID, ENS, Nym
+`packages/ens`, the ENS screens, the live-site build (`vite.ens.config.ts`, `vercel.ens.json`, `ens.html`), the Sepolia scripts and config, World ID (IDKit, `world.ts`, `/join`, `/rp-context`, the env vars and docs), and the Nym transport, toggle and notes. The Sepolia contracts stay deployed, with the deployer's subregistry roles revoked first, so they're frozen rather than abandoned. The local `apps/web/dist-ens` build output isn't in git and was left on disk.
+
+### Removed: stealth payments
+`stealth.ts`, `payStealth` and the announcer go too, though ERC-5564 doesn't need ENS. **Why not keep them:**
+- A payment funds a throwaway announcer with a second withdrawal. That's about twice the gas, it isn't atomic, and it leaves dust.
+- The validator would need a frame layout change to announce atomically.
+- The reference pool already does private delivery better, with post-quantum encrypted notes to reusable addresses (`docs/landscape.md`).
+- `freshAddress()` already covers the case that matters here, a recipient you control with 0 ETH.
+
+**What it would take to bring back:** a fourth frame, or announcements from the pool itself.
+
+### The association set is an interface, not a server
+`AssociationSetProvider` (`packages/sdk/src/association.ts`) has four calls: `sourceId`, `currentRoot`, `membershipProof`, `status`. `status` has `pending` and `declined` so a reviewing ASP, such as 0xbow's, can explain refusals.
+- **Reference:** `allowlistProvider` over `apps/asp`, now an allowlist only.
+- **Proofs are built locally** from the whole set (`publishedSetProvider`), so the provider doesn't learn which note is about to be spent.
+- **The SDK checks before proving:** the provider's source must be the pool's `ASP_SOURCE_ID`, and the proof must reach its root. This catches a wrong or buggy provider without proving, and without the reputation cost of a refused transaction. The chain remains the authority.
+- **One pool per provider still holds:** `ASP_SOURCE_ID` is immutable. A pool accepting several providers is a contract change we didn't make. **Cost:** liquidity splits across pools.
+
+The pool, validator, circuits and ragequit didn't change.
+
+### The demo uses one association-set pool
+With World ID gone, the second pool (`local-asp2`, `ASP2_KEY`) existed only to keep demo approvals out of the World ID set. The demo now uses `local-asp`, and its allowlist ASP runs on 8790.
+
+### Hackathon-only docs removed
+`SUBMISSION.md` and `docs/video-shotlist.md` described the judged entry and would be wrong now. They're in the tag.
+
+### Root `typecheck` and `build` scripts
+The brief's "typecheck clean" had no single command. `pnpm typecheck` runs `tsc` on the SDK, the ASP, the web app and the scripts (with a new `tsconfig.scripts.json`), and `pnpm build` builds the web app.
 
 ## The mempool comparison proves against placeholder limits
 The sidecar's `eth_estimateFrameTransactionGas` overwrites the limits of every frame after VERIFY with 10M. Those limits are part of sigHash, so a normal proof fails there with `validation frame 0: reverted`. The dry run proves for those limits and sends the same bytes to both nodes. VERIFY, which is what's being judged, is unchanged. Measured: neither call moves `seen` or records an admission.
-
-## ENS is the directory, and the pool's chain is the truth
-ENS says which ASPs exist and what they claim. It can't approve anyone: the circuit checks membership against a root on the pool's chain. So a client tests each ENS root two ways, with no contract change and no server: the pool's immutable `ASP_SOURCE_ID` must match the named operator, and the recent-root predeploy must hold that root at that slot. The predeploy has no getter, but its storage layout is deterministic, so one `eth_getStorageAt` is enough. Measured on the running devnet: the real root matches, and a forged root or wrong slot fails.
-
-## One pool per ASP
-`ASP_SOURCE_ID` is immutable, and changing it means changing the validator's assumptions. So ENS gives discovery across many ASPs, and each pool still has exactly one. Choosing an ASP means choosing its pool. **Cost:** liquidity splits across pools, which shrinks each anonymity set. A pool taking several ASPs would fix that, and is a contract change we didn't make.
-
-## ASP names expire, can't move, and can't be pulled early
-ASP names last a year and the curator renews them. The curator holds only `REGISTRAR` and `RENEW`, so it can't edit a record, swap a resolver or unregister a name.
-
-**Removing a bad ASP means not renewing it.** That's slow and visible, and we chose it over instant removal. A bad ASP can only over-approve or withhold: it can't take money, and the public exit stays open. Instant revocation would give the curator a censorship switch over every ASP to guard against a harm that's already bounded.
-
-**What the curator keeps:** after a name expires, it could register the label to someone else. Clients catch this because the new operator won't match the pool's `ASP_SOURCE_ID`. Anyone can also run their own directory, since the parent name is just config.
-
-ASP names are non-transferable, so a provider's reputation can't be sold with the name. The owner can still repoint its own resolver, which is how it rotates a compromised operator key.
-
-## The ASP owner and operator are different keys
-The operator is a hot key on a server, so its role covers only `asp.root`, `asp.slot` and `asp.policy`. A leaked operator key can publish a wrong root, which the cross-check catches, but it can't change the pool, operator or endpoint records, or the name.
-
-## Receive names are forever names
-They never expire, and nobody holds `UNREGISTER`, including the owner, so a name can't be released and reclaimed by someone else. **The limit:** "forever" holds inside the registry. A name stops resolving if `relayless.eth` expires, and anyone can renew it through the registrar. The second limit, that whoever held the subregistry role on `relayless.eth` could replace the registry beneath it, ended on 2026-11-16, when the deployer revoked that role on Sepolia. A Foundry test still shows both limits for a fresh deployment, where the role exists until it's revoked.
-
-## Each person gets their own resolver
-Resolver roles cover every name on an instance, not one name. On a shared resolver, the app key's role would reach everyone's stealth record.
-
-## Announcements come from a fresh wallet
-The validator pins each withdrawal's frames, so a payment can't carry an announcement without a validator change. The payer's wallet can't send it either, because that links the payer. So a second withdrawal funds a new throwaway wallet, which announces first and then the payment goes out. **Costs:** about twice the gas, not atomic, and a little dust left in the announcer. Announcing first means a failure can't strand money where it can't be found. A wallet is never reused, because a shared one links its payments.
-
-## Listing names from logs
-ENSv2 has no enumeration function, and wildcard resolution can't list what exists. So the client reads `LabelRegistered` directly from a public RPC. **Cost:** it depends on an RPC that keeps logs and allows browser access. A public one rate-limited us in testing, so reads back off and fall through to a second endpoint in config.
 
 ## Local stack with a sidecar patch
 The public gateway rejects this tx twice: a 100k cap that ignores stake, and `COD-010` treating precompiles as un-deployed (`docs/repro-gateway.md`). We use local ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. **The alt mempool authors confirmed a local sidecar is fine for judging.** RPC URLs live only in config, so moving later is a config change.
@@ -72,9 +70,6 @@ ERC-8421's REPUTATION-040 says a replacement isn't a new `seen`, and the authors
 
 ## The SDK doesn't trust the node's log index
 ethrex lost the number lookup for a run of blocks on 2 of 2 fresh chains, which breaks any `eth_getLogs` touching them. The SDK splits the range around such blocks. If a gap hid a pool leaf, reads fail with a clear error rather than building a wrong tree, and the root check stays as a second guard.
-
-## World ID: Orb-level proof of a unique human
-The association set needs "one person, once", and nothing about who. Each proof is bound to its depositor, one nullifier maps to one address, and the depositor must sign. World's API only checks validity, so those live on our server, and the circuit enforces membership. It stays off until configured. Why this credential: `docs/world-id-debrief.md`.
 
 ## Fee-bump limit is optional and off by default
 Measured: the sidecar counts each replacement as `seen`, and a note could make about 248 of them. A fixed max-fee range in the validator limits that (1–8 gwei gives about 22). The authors confirmed the counting is a prototype bug, not ERC-8421 behaviour, so a permanent liveness cost isn't worth it: with the range on, all withdrawals stall if the base fee passes the ceiling. Enable with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` at validator build time, and the SDK reads it from the deployed config. The checks aren't in the bytecode when it's off.
