@@ -13,13 +13,16 @@
     "test:sdk": "pnpm --filter @relayless/sdk test",
     "deploy": "tsx scripts/deploy.ts",
     "e2e": "tsx scripts/e2e.ts",
+    "e2e:asp": "tsx scripts/e2e-asp.ts",
     "web": "pnpm --filter @relayless/web dev",
     "test:asp": "pnpm --filter @relayless/asp test",
     "demo:asp": "scripts/demo-asp.sh",
     "demo:seed": "tsx scripts/demo-seed.ts",
     "demo:reset": "tsx scripts/demo-reset.ts",
     "demo:prep": "scripts/demo-prep.sh",
-    "demo:gif": "node scripts/capture-gif.mjs"
+    "demo:gif": "node scripts/capture-gif.mjs",
+    "build": "pnpm --filter @relayless/web build",
+    "typecheck": "tsc -p packages/sdk && tsc -p apps/asp && tsc -p apps/web && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {
     "playwright": "1.61.1",
@@ -28,7 +31,6 @@
     "@types/node": "^22.0.0",
     "viem": "^2.57.7",
     "@relayless/sdk": "workspace:*",
-    "@forshtat/hegota-support": "0.0.1",
-    "@worldcoin/idkit-core": "4.6.0"
+    "@forshtat/hegota-support": "0.0.1"
   }
 }
