@@ -3,7 +3,6 @@ import type { Relayless, Signer } from "@relayless/sdk";
 import { Button, Problem, plainError } from "../ui";
 import { browserSigner, connectPool, demoSigner, hasBrowserWallet, testSigner } from "../wallet";
 import { demo } from "../demo";
-import { LiveQr } from "../Findings";
 import { cfg } from "../config";
 
 // A static crowd for the first screen: the idea before any data exists. Uniform on purpose, with one marked dot.
@@ -39,7 +38,6 @@ export function Connect({ onConnected }: { onConnected(c: { rl: Relayless; signe
         </div>
         {error && <Problem>{error}</Problem>}
         <p className="mt-3 text-sm text-slate">Test network only ({cfg.name}). Don't use real funds. <a href={demo ? "/findings?demo=1" : "/findings"} className="underline underline-offset-4">What we found building this</a></p>
-        <LiveQr className="mt-3" />
       </div>
       <svg viewBox="0 0 280 240" className="w-full" aria-hidden="true">
         {CROWD.map((i) => (
