@@ -1,4 +1,6 @@
 // Generates and compiles the validator: the VERIFY-frame code of the pool, with both verifying keys hardcoded.
+// One validator per spec profile (see PROFILES below and packages/sdk/src/profiles.ts): the profiles differ in where
+// the recent roots come from and so in every frame index after them. Everything else is shared.
 //
 // It is hand-written Yul rather than the snarkjs Solidity template because:
 //   - vanilla Solidity cannot emit the frame opcodes (Yul can, through `verbatim`);
@@ -48,7 +50,48 @@ function verifierBody(key) {
           need(eq(mload(0), 1))`;
 }
 
-function validatorYul({ rootSalt, minExec, minState, feeRange }) {
+// The two profiles this generator emits. `rootFrame`: the EIP-8272 roots arrive in a VERIFY frame to the recent-root
+// contract at index 0 (current text), instead of an envelope field read with RECENTROOTREFLOAD (devnet-8421).
+export const PROFILES = {
+  "devnet-8421": { rootFrame: false, recentRoot: "0x0000000000000000000000000000000000008272", refundOverhead: 150000 },
+  "hegota-8141": { rootFrame: true, recentRoot: "0x0000000000000000000000000000000000008272", refundOverhead: 150000 },
+};
+
+// How each profile reads the i-th root reference's source and root, and checks how many there are.
+function rootReads(profile) {
+  if (!profile.rootFrame) {
+    return {
+      source: (i) => `rootref(${i}, 0)`,
+      root: (i) => `rootref(${i}, 2)`,
+      count: (n) => `need(eq(txparam(0x11), ${n}))`,
+      frameChecks: "",
+    };
+  }
+  // Frame 0 is EIP-8272's verifier frame: identified as the spec does (resolved target, VERIFY, zero flags, zero value,
+  // zero state limit), and it succeeded, so every tuple in it is stored and recent. Tuples are 72 bytes:
+  // source_id (32) || uint64_be(slot) (8) || root (32).
+  return {
+    source: (i) => `framedata(${i * 72}, 0)`,
+    root: (i) => `framedata(${i * 72 + 40}, 0)`,
+    count: (n) => `need(eq(frameparam(0, 4), ${n * 72}))`,
+    frameChecks: `
+        need(eq(frameparam(0, 0), ${profile.recentRoot}))
+        need(eq(frameparam(0, 2), 1))
+        need(iszero(frameparam(0, 3)))
+        need(iszero(frameparam(0, 8)))
+        need(iszero(frameparam(0, 9)))
+        need(eq(frameparam(0, 5), 1))`,
+  };
+}
+
+function validatorYul({ profile, rootSalt, minExec, minState, feeRange }) {
+  const r = rootReads(profile);
+  // Frame indices: the pool's VERIFY frame, the SENDER frame and the optional refund, after the root frame if any.
+  const V = profile.rootFrame ? 1 : 0;
+  const S = V + 1;
+  const D = V + 2;
+  const usedBy = (f) => `add(frameparam(${f}, 10), frameparam(${f}, 11))`;
+  const usedSum = Array.from({ length: S + 1 }, (_, f) => usedBy(f)).reduce((a, b) => `add(${a}, ${b})`);
   // Optional. A fixed range for the max fee bounds how many fee-bump replacements one note can make, because a
   // replacement must raise it by 10% each time. See docs/reputation-analysis.md for the trade-off.
   const feeRangeChecks = feeRange
@@ -93,8 +136,9 @@ object "RelaylessValidator" {
         // This frame must belong to a transaction the pool itself sends. Without this check a stranger's transaction
         // could name the pool as its payer.
         need(eq(txparam(0x02), address()))
-        need(eq(txparam(0x0A), 0))
-        need(eq(frameparam(0, 2), 1))
+        need(eq(txparam(0x0A), ${V}))
+        need(eq(frameparam(${V}, 2), 1))
+${r.frameChecks}
 
         ${feeRangeChecks}
 
@@ -114,45 +158,45 @@ object "RelaylessValidator" {
         // The root comes from a reference the protocol has already checked; here we check whose it is.
         mstore(0, shl(96, address()))
         mstore(20, ${rootSalt})
-        need(eq(rootref(0, 0), keccak256(0, 52)))
-        let rootCommit := rootref(0, 2)
+        need(eq(${r.source(0)}, keccak256(0, 52)))
+        let rootCommit := ${r.root(0)}
         field(rootCommit)
 
-        // Frame 1 is a SENDER call to the pool itself, moving no value at top level, with enough gas that the note
+        // Frame ${S} is a SENDER call to the pool itself, moving no value at top level, with enough gas that the note
         // cannot be burned by a too-small limit.
-        need(eq(frameparam(1, 2), 2))
-        need(eq(frameparam(1, 0), address()))
-        need(iszero(frameparam(1, 3)))
-        need(iszero(frameparam(1, 8)))
-        need(iszero(lt(frameparam(1, 1), ${minExec})))
-        need(iszero(lt(frameparam(1, 9), ${minState})))
+        need(eq(frameparam(${S}, 2), 2))
+        need(eq(frameparam(${S}, 0), address()))
+        need(iszero(frameparam(${S}, 3)))
+        need(iszero(frameparam(${S}, 8)))
+        need(iszero(lt(frameparam(${S}, 1), ${minExec})))
+        need(iszero(lt(frameparam(${S}, 9), ${minState})))
 
-        let selector := shr(224, framedata(0, 1))
+        let selector := shr(224, framedata(0, ${S}))
         let amount
         let fee
         switch selector
         case ${sel(WITHDRAW_SIG)} {
-          need(eq(frameparam(1, 4), 196))
+          need(eq(frameparam(${S}, 4), 196))
           let frames := txparam(0x09)
           switch frames
-          case 2 {}
-          case 3 {
+          case ${S + 1} {}
+          case ${D + 1} {
             // Optional refund: a DEFAULT frame calling refund() on the pool. The approval scope bits must be clear.
-            need(iszero(frameparam(2, 2)))
-            need(eq(frameparam(2, 0), address()))
-            need(iszero(frameparam(2, 3)))
-            need(iszero(frameparam(2, 8)))
-            need(eq(frameparam(2, 4), 4))
-            need(eq(shr(224, framedata(0, 2)), ${sel(REFUND_SIG)}))
+            need(iszero(frameparam(${D}, 2)))
+            need(eq(frameparam(${D}, 0), address()))
+            need(iszero(frameparam(${D}, 3)))
+            need(iszero(frameparam(${D}, 8)))
+            need(eq(frameparam(${D}, 4), 4))
+            need(eq(shr(224, framedata(0, ${D})), ${sel(REFUND_SIG)}))
           }
           default { revert(0, 0) }
 
-          need(iszero(shr(160, framedata(4, 1))))
-          amount := framedata(36, 1)
-          fee := framedata(68, 1)
-          let change := framedata(100, 1)
-          let k := framedata(164, 1)
-          need(eq(framedata(132, 1), nullifierHash))
+          need(iszero(shr(160, framedata(4, ${S}))))
+          amount := framedata(36, ${S})
+          fee := framedata(68, ${S})
+          let change := framedata(100, ${S})
+          let k := framedata(164, ${S})
+          need(eq(framedata(132, ${S}), nullifierHash))
           // Each must be a canonical field element: amount + r would verify the same and pay out a fortune.
           field(amount)
           need(change)
@@ -161,11 +205,11 @@ object "RelaylessValidator" {
 
           let aspRoot := 0
           switch aspSource
-          case 0 { need(eq(txparam(0x11), 1)) }
+          case 0 { ${r.count(1)} }
           default {
-            need(eq(txparam(0x11), 2))
-            need(eq(rootref(1, 0), aspSource))
-            aspRoot := rootref(1, 2)
+            ${r.count(2)}
+            need(eq(${r.source(1)}, aspSource))
+            aspRoot := ${r.root(1)}
             need(aspRoot)
             field(aspRoot)
           }
@@ -182,13 +226,13 @@ object "RelaylessValidator" {
           verifyWithdraw()
         }
         case ${sel(RAGEQUIT_SIG)} {
-          need(eq(frameparam(1, 4), 132))
-          need(eq(txparam(0x09), 2))
-          need(eq(txparam(0x11), 1))
-          let label := framedata(4, 1)
-          amount := framedata(36, 1)
-          fee := framedata(68, 1)
-          need(eq(framedata(100, 1), nullifierHash))
+          need(eq(frameparam(${S}, 4), 132))
+          need(eq(txparam(0x09), ${S + 1}))
+          ${r.count(1)}
+          let label := framedata(4, ${S})
+          amount := framedata(36, ${S})
+          fee := framedata(68, ${S})
+          need(eq(framedata(100, ${S}), nullifierHash))
           field(label)
           field(amount)
 
@@ -219,28 +263,23 @@ object "RelaylessValidator" {
       function verifyRagequit() {${verifierBody(q)}
       }
 
-      // Frame 2 of a withdrawal: hand back the fee that gas did not use. REFUND_OVERHEAD covers what FRAMEPARAM cannot
-      // see (intrinsic gas and this frame), rounded up: an underestimate would be paid by the other depositors.
+      // Frame ${D} of a withdrawal: hand back the fee that gas did not use. The refund overhead covers what FRAMEPARAM
+      // cannot see (intrinsic gas and this frame), rounded up: an underestimate would be paid by the other depositors.
       function refund() {
         need(eq(caller(), 0xaa))
         need(eq(txparam(0x02), address()))
-        need(eq(txparam(0x0A), 2))
-        need(eq(frameparam(1, 5), 1))
-        let used := add(frameparam(0, 10), frameparam(0, 11))
-        used := add(used, add(frameparam(1, 10), frameparam(1, 11)))
-        used := add(used, ${REFUND_OVERHEAD})
+        need(eq(txparam(0x0A), ${D}))
+        need(eq(frameparam(${S}, 5), 1))
+        let used := add(${usedSum}, ${profile.refundOverhead})
         let cost := mul(used, gasprice())
-        let fee := framedata(68, 1)
+        let fee := framedata(68, ${S})
         // A recipient that refuses simply forgoes the refund, which stays in the reserve. Bounded gas, nothing copied.
-        if gt(fee, cost) { pop(call(100000, framedata(4, 1), sub(fee, cost), 0, 0, 0, 0)) }
+        if gt(fee, cost) { pop(call(100000, framedata(4, ${S}), sub(fee, cost), 0, 0, 0, 0)) }
       }
     }
   }
 }`;
 }
-
-// Intrinsic gas of a withdrawal plus the refund frame's own execution. Checked against receipts by scripts/e2e.ts.
-const REFUND_OVERHEAD = 150000;
 
 // Off by default. To turn it on: RELAYLESS_FEE_RANGE=<min wei>:<max wei>, for example 1000000000:8000000000, which
 // allows at most log1.1(8) = about 22 replacements per note.
@@ -250,29 +289,52 @@ function parseFeeRange(value) {
   if (!m || BigInt(m[1]) === 0n || BigInt(m[1]) >= BigInt(m[2])) throw new Error("RELAYLESS_FEE_RANGE must be <min wei>:<max wei>, with 0 < min < max");
   return { min: m[1], max: m[2] };
 }
-const feeRange = parseFeeRange(process.env.RELAYLESS_FEE_RANGE);
 
+// The SENDER frame's minimum limits. Running out of either after APPROVE would burn the note, so they cover the worst
+// case with room to spare. Measured in docs/gas-report.md, per profile.
 const MIN_SENDER_EXEC = 1_500_000;
 const MIN_SENDER_STATE = 1_000_000;
 const rootSalt = `0x${keccak_256("relayless.root")}`;
 
-const source = validatorYul({ rootSalt, minExec: MIN_SENDER_EXEC, minState: MIN_SENDER_STATE, feeRange });
-const out = JSON.parse(
-  solc.compile(
-    JSON.stringify({
-      language: "Yul",
-      sources: { "RelaylessValidator.yul": { content: source } },
-      settings: { optimizer: { enabled: true, runs: 200, details: { yul: true } }, evmVersion: "cancun", outputSelection: { "*": { "*": ["evm.bytecode.object", "evm.deployedBytecode.object"] } } },
-    }),
-  ),
-);
-for (const e of out.errors ?? []) if (e.severity === "error") throw new Error(e.formattedMessage);
-const compiled = Object.values(out.contracts["RelaylessValidator.yul"])[0];
-const dir = join(root, "generated");
-mkdirSync(dir, { recursive: true });
-writeFileSync(join(dir, "RelaylessValidator.yul"), source);
-writeFileSync(
-  join(dir, "validator.json"),
-  JSON.stringify({ bytecode: `0x${compiled.evm.bytecode.object}`, rootSalt, minSenderExec: MIN_SENDER_EXEC, minSenderState: MIN_SENDER_STATE, refundOverhead: REFUND_OVERHEAD, feeRange }, null, 2),
-);
-console.log(`validator: ${compiled.evm.bytecode.object.length / 2} bytes, fee range ${feeRange ? `${feeRange.min}:${feeRange.max}` : "off"}`);
+function build(name, feeRange) {
+  const profile = PROFILES[name];
+  const source = validatorYul({ profile, rootSalt, minExec: MIN_SENDER_EXEC, minState: MIN_SENDER_STATE, feeRange });
+  const out = JSON.parse(
+    solc.compile(
+      JSON.stringify({
+        language: "Yul",
+        sources: { "RelaylessValidator.yul": { content: source } },
+        settings: { optimizer: { enabled: true, runs: 200, details: { yul: true } }, evmVersion: "cancun", outputSelection: { "*": { "*": ["evm.bytecode.object", "evm.deployedBytecode.object"] } } },
+      }),
+    ),
+  );
+  for (const e of out.errors ?? []) if (e.severity === "error") throw new Error(e.formattedMessage);
+  const compiled = Object.values(out.contracts["RelaylessValidator.yul"])[0];
+  return {
+    source,
+    json: {
+      profile: name,
+      bytecode: `0x${compiled.evm.bytecode.object}`,
+      rootSalt,
+      recentRoot: profile.recentRoot,
+      minSenderExec: MIN_SENDER_EXEC,
+      minSenderState: MIN_SENDER_STATE,
+      refundOverhead: profile.refundOverhead,
+      feeRange,
+    },
+  };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const feeRange = parseFeeRange(process.env.RELAYLESS_FEE_RANGE);
+  const names = process.argv[2] ? [process.argv[2]] : Object.keys(PROFILES);
+  const dir = join(root, "generated");
+  mkdirSync(dir, { recursive: true });
+  for (const name of names) {
+    if (!PROFILES[name]) throw new Error(`unknown profile ${name}: one of ${Object.keys(PROFILES).join(", ")}`);
+    const { source, json } = build(name, feeRange);
+    writeFileSync(join(dir, `RelaylessValidator.${name}.yul`), source);
+    writeFileSync(join(dir, `validator.${name}.json`), JSON.stringify(json, null, 2));
+    console.log(`validator ${name}: ${(json.bytecode.length - 2) / 2} bytes, fee range ${feeRange ? `${feeRange.min}:${feeRange.max}` : "off"}`);
+  }
+}

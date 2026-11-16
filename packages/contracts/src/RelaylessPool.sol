@@ -34,13 +34,15 @@ contract RelaylessPool {
     uint256 public constant MIN_DEPOSIT = 0.01 ether;
     /// @dev Bounds what a recipient can burn: the rest of the frame must still be able to finish.
     uint256 internal constant PAY_GAS = 100_000;
-    address internal constant RECENT_ROOT = 0x0000000000000000000000000000000000008272;
     bytes32 public constant ROOT_SALT = keccak256("relayless.root");
 
     /// @notice Holds the VERIFY-frame code. Run by delegatecall, so its APPROVE acts on this contract.
     address public immutable VALIDATOR;
     /// @notice The EIP-8272 source of the association set root, or 0 if this pool has no association set.
     bytes32 public immutable ASP_SOURCE_ID;
+    /// @notice The EIP-8272 recent-root contract. Its address depends on the spec profile the chain follows, and the
+    /// validator built for the same profile checks roots against the same address.
+    address public immutable RECENT_ROOT;
 
     LeanIMTData internal tree;
     uint256 public nonce;
@@ -73,12 +75,17 @@ contract RelaylessPool {
         _;
     }
 
-    /// @param stakeAmount Sent to the staking registry; staking here makes the pool the staker without a VERIFY path
-    /// that accepts anything but a proof. The rest of `msg.value` becomes the gas reserve.
-    constructor(address validator, address registry, uint256 stakeAmount, uint32 unstakeDelaySec, bytes32 aspSourceId) payable {
+    /// @param registry The alt mempool's staking registry, or 0 on a chain without one (the public mempool needs no
+    /// stake). Staking here makes the pool the staker without a VERIFY path that accepts anything but a proof.
+    /// @param stakeAmount Sent to the registry. The rest of `msg.value` becomes the gas reserve.
+    constructor(address validator, address registry, uint256 stakeAmount, uint32 unstakeDelaySec, bytes32 aspSourceId, address recentRoot)
+        payable
+    {
         VALIDATOR = validator;
         ASP_SOURCE_ID = aspSourceId;
-        IStakingRegistry(registry).addStake{value: stakeAmount}(unstakeDelaySec);
+        RECENT_ROOT = recentRoot;
+        if (registry != address(0)) IStakingRegistry(registry).addStake{value: stakeAmount}(unstakeDelaySec);
+        else if (stakeAmount != 0) revert BadValue();
     }
 
     /// @notice A normal transaction from the depositor. `precommitment` = Poseidon(nullifier, secret).
