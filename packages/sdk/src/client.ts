@@ -6,16 +6,16 @@
 //  - the pool's solvency is checked before anything is sent;
 //  - the transaction is simulated before it is broadcast;
 //  - a nullifier is never sent twice, except as a fee bump replacing the pending transaction.
-import { concat, encodeFunctionData, keccak256, numberToHex, parseEther, type Address, type Hex } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { encodeFunctionData, numberToHex, parseEther, type Address, type Hex } from "viem";
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
 import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
 import { DRY_RUN_LIMITS, EMPTY_PROOF, LIMITS, NONCE_MANAGER, buildRagequit, buildWithdrawal, encodeProof, rawOf, sigHashOf, toWire, txHashOf, type FrameTx, type RootRef } from "./frame.js";
 import type { FrameLimits } from "./frame.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
-import { announceCall, deriveStealthPayment, type StealthPayment } from "./stealth.js";
+import { proofMatchesRoot, type AssociationSetProvider, type MembershipProof } from "./association.js";
 import { TREE_DEPTH, rootOf, siblings } from "./tree.js";
+import { sourceIdOf } from "./recent-root.js";
 
 export interface Signer {
   address: Address;
@@ -51,13 +51,8 @@ export interface ConnectOptions {
   chainId?: number;
   /** Must match the validator's fee range, if the pool was built with one. */
   feeRange?: { min: bigint; max: bigint };
-  /** Where to read the association set. Required when the pool has one. */
-  asp?: AssociationSet;
-}
-
-/** The association set: labels approved by the ASP, and its root's recent-root reference. */
-export interface AssociationSet {
-  load(): Promise<{ labels: bigint[]; ref: RootRef }>;
+  /** Where to read the association set. Required when the pool has one. Any `AssociationSetProvider` works. */
+  asp?: AssociationSetProvider;
 }
 
 export interface Note extends NoteSecrets {
@@ -153,16 +148,13 @@ export function planPayment(notes: Note[], amount: bigint, k: bigint, leafCount:
   return plan;
 }
 
-/** Room above a withdrawal's frame limits for its intrinsic gas. */
-const WITHDRAWAL_GAS_MARGIN = 300_000n;
-const ANNOUNCE_GAS = 120_000n;
-
 export class Relayless {
   private master?: bigint;
   private state?: PoolState;
   private store: InFlightStore;
   private rootSalt?: Hex;
   private aspSource?: Hex;
+  private aspSourceChecked = false;
   private chainId = 0;
 
   private constructor(private o: ConnectOptions) {
@@ -292,7 +284,7 @@ export class Relayless {
     return {
       root,
       ref: {
-        sourceId: keccak256(concat([this.o.pool, this.rootSalt!])),
+        sourceId: sourceIdOf(this.o.pool, this.rootSalt!),
         slot: BigInt(block.slotNumber),
         root: numberToHex(root.rootCommit, { size: 32 }),
       },
@@ -422,43 +414,6 @@ export class Relayless {
     };
   }
 
-  /**
-   * Pays a stealth meta-address, usually read from an ENS name: one new address, with its announcement, from the pool.
-   *
-   * The pool's validator pins each withdrawal's frames, so a payment can't carry its own announcement, and the payer's
-   * wallet can't send it without linking itself. So a second withdrawal funds a new throwaway wallet, which announces.
-   * The announcement goes first: if anything fails before the payment, no money has gone anywhere it can't be found.
-   * A wallet is never reused, because a shared announcer would link the payments it announced.
-   */
-  async payStealth(opts: { metaAddress: string; amount: bigint; announcer: Address; minAnon?: number }): Promise<{ payment: StealthPayment; announceHash: Hex; handles: WithdrawHandle[] }> {
-    await this.unlock();
-    await this.settleInFlight();
-    const payment = deriveStealthPayment(opts.metaAddress);
-    const caps = await this.feeCaps();
-    const block = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
-    const announceGasPrice = BigInt(block.baseFeePerGas) * 3n + 1000n;
-    const funding = (LIMITS.verifyExecution + LIMITS.senderExecution + LIMITS.senderState + LIMITS.refundExecution + WITHDRAWAL_GAS_MARGIN) * caps.maxFeePerGas + ANNOUNCE_GAS * announceGasPrice;
-    const available = (await this.notes()).filter((n) => !n.spent && !this.store.get(n.nullifierHash)).reduce((t, n) => t + n.value, 0n);
-    if (available < opts.amount + funding) throw new Error(`a private name payment also needs about ${funding} wei to publish its announcement, and this balance doesn't cover both`);
-
-    const announcerKey = generatePrivateKey();
-    const announcer = privateKeyToAccount(announcerKey);
-    const funded = await this.withdraw({ to: announcer.address, amount: funding, minAnon: opts.minAnon });
-    await funded.wait();
-    const nonce = 0;
-    const raw = await announcer.signTransaction({ chainId: this.chainId, nonce, to: opts.announcer, data: announceCall(payment), gas: ANNOUNCE_GAS, gasPrice: announceGasPrice, type: "legacy" });
-    const announceHash = await rpc<Hex>(this.o.rpc, "eth_sendRawTransaction", [raw]);
-    let receipt: any = null;
-    for (let i = 0; i < 90 && !receipt; i++) {
-      receipt = await rpc(this.o.rpc, "eth_getTransactionReceipt", [announceHash]);
-      if (!receipt) await new Promise((r) => setTimeout(r, 1000));
-    }
-    if (!receipt || receipt.status !== "0x1") throw new Error("the announcement didn't land, so the payment wasn't sent. Your money is safe: try again");
-
-    const handles = await this.pay({ to: payment.stealthAddress, amount: opts.amount, minAnon: opts.minAnon });
-    return { payment, announceHash, handles };
-  }
-
   async withdraw(opts: WithdrawOptions): Promise<WithdrawHandle> {
     await this.unlock();
     await this.settleInFlight();
@@ -508,14 +463,31 @@ export class Relayless {
     return { hash, nullifierHash: note.nullifierHash, recipient: opts.to, amount: opts.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
   }
 
-  /** Null if the pool has no association set. Throws a plain error if this note isn't in it. */
-  private async aspWitness(label: bigint): Promise<{ ref: RootRef; index: number; siblings: bigint[] } | null> {
-    if (BigInt(this.aspSource!) === 0n) return null;
-    if (!this.o.asp) throw new Error("this pool needs an association set, and none was provided");
-    const { labels, ref } = await this.o.asp.load();
-    const index = labels.indexOf(label);
-    if (index < 0) throw new NotApprovedError("this money isn't in the pool's approved set yet. You can get approved, or exit publicly back to the wallet that added it");
-    return { ref, index, siblings: siblings(labels, index) };
+  /**
+   * Null if the pool has no association set. Throws NotApprovedError if this note isn't in it. Checks everything it
+   * can before proving: the provider must publish under the pool's source, and its proof must reach its root. The
+   * chain still has the last word, through the validator's recent-root check.
+   */
+  private async aspWitness(label: bigint): Promise<MembershipProof | null> {
+    const poolSource = this.aspSource!;
+    if (BigInt(poolSource) === 0n) return null;
+    const provider = this.o.asp;
+    if (!provider) throw new Error("this pool needs an association set, and none was provided");
+    if (!this.aspSourceChecked) {
+      const source = await provider.sourceId();
+      if (source.toLowerCase() !== poolSource.toLowerCase()) throw new Error(`this association set provider writes roots as ${source}, but the pool only accepts ${poolSource}`);
+      this.aspSourceChecked = true;
+    }
+    const proof = await provider.membershipProof(label);
+    if (!proof) {
+      const status = await provider.status(label);
+      if (status === "pending") throw new NotApprovedError("this money is waiting for the pool's approver to review it. Try again later, or exit publicly back to the wallet that added it");
+      if (status === "declined") throw new NotApprovedError("the pool's approver declined this money, so it can't leave privately. You can exit publicly back to the wallet that added it");
+      throw new NotApprovedError("this money isn't in the pool's approved set yet. You can get approved, or exit publicly back to the wallet that added it");
+    }
+    if (proof.ref.sourceId.toLowerCase() !== poolSource.toLowerCase()) throw new Error("the association set provider returned a root from a source this pool doesn't accept");
+    if (!proofMatchesRoot(label, proof)) throw new Error("the association set provider returned a membership proof that doesn't match its root");
+    return proof;
   }
 
   /** Builds and proves a withdrawal without sending it. */
@@ -666,8 +638,7 @@ export class Relayless {
   }
 }
 
-/** A recent-root source id: the same derivation the EIP-8272 predeploy uses. */
-export const sourceIdOf = (writer: Address, salt: Hex): Hex => keccak256(concat([writer, salt]));
+export { sourceIdOf };
 
 export { parseEther, ZERO };
 export const SENDER_LIMITS = LIMITS;
