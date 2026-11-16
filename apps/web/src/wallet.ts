@@ -98,7 +98,7 @@ export async function browserSigner(): Promise<Signer> {
 export const associationSet = () => (cfg.aspUrl ? allowlistProvider(cfg.aspUrl) : undefined);
 
 export const connectPool = (signer: Signer) =>
-  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: associationSet() });
+  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, profile: cfg.profile, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: associationSet() });
 
 export const walletBalance = async (a: Address) => BigInt(await rpc(cfg.rpc, "eth_getBalance", [a, "latest"]));
 

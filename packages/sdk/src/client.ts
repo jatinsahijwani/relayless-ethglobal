@@ -10,8 +10,9 @@ import { encodeFunctionData, numberToHex, parseEther, type Address, type Hex } f
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
 import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
-import { DRY_RUN_LIMITS, EMPTY_PROOF, LIMITS, NONCE_MANAGER, buildRagequit, buildWithdrawal, encodeProof, rawOf, sigHashOf, toWire, txHashOf, type FrameTx, type RootRef } from "./frame.js";
+import { DRY_RUN_LIMITS, EMPTY_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeProof, rawOf, refsOf, sigHashOf, toWire, verifyIndex, type FrameTx, type RootRef } from "./frame.js";
 import type { FrameLimits } from "./frame.js";
+import { profileOf, type Profile, type ProfileId } from "./profiles.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
 import { proofMatchesRoot, type AssociationSetProvider, type MembershipProof } from "./association.js";
 import { TREE_DEPTH, rootOf, siblings } from "./tree.js";
@@ -42,8 +43,10 @@ export function fileProver(dir: string): Prover {
 export interface ConnectOptions {
   /** Chain reads. */
   rpc: string;
-  /** The alt mempool node. */
-  mempool: string;
+  /** Where withdrawals are sent: the alt mempool node on devnet-8421. Defaults to `rpc`, whose public mempool takes them on hegota-8141. */
+  mempool?: string;
+  /** The spec profile the chain follows, which the pool was deployed for. Defaults to devnet-8421. */
+  profile?: ProfileId;
   pool: Address;
   signer: Signer;
   prover: Prover;
@@ -156,9 +159,19 @@ export class Relayless {
   private aspSource?: Hex;
   private aspSourceChecked = false;
   private chainId = 0;
+  readonly profile: Profile;
 
   private constructor(private o: ConnectOptions) {
     this.store = o.store ?? new MemoryStore();
+    this.profile = profileOf(o.profile);
+  }
+
+  private get mempool(): string {
+    return this.o.mempool ?? this.o.rpc;
+  }
+
+  private simulate(tx: FrameTx): Promise<any> {
+    return rpc(this.o.rpc, "ethrex_simulateFrameTransaction", this.profile.simulateParams(rawOf(this.profile, tx)));
   }
 
   static async connect(o: ConnectOptions): Promise<Relayless> {
@@ -258,7 +271,7 @@ export class Relayless {
   }
 
   async isSpent(nh: bigint): Promise<boolean> {
-    return BigInt(await rpc(this.o.rpc, "eth_getStorageAt", [NONCE_MANAGER, nonceSlot(this.o.pool, nh), "latest"])) !== 0n;
+    return BigInt(await rpc(this.o.rpc, "eth_getStorageAt", [this.profile.nonceManager, nonceSlot(this.o.pool, nh), "latest"])) !== 0n;
   }
 
   async balance(): Promise<bigint> {
@@ -306,14 +319,19 @@ export class Relayless {
 
   /** What the transaction escrows from the pool at APPROVE. The fee must cover it. */
   private async maxCostOf(tx: FrameTx): Promise<bigint> {
-    const sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
-    return BigInt(sim.maxCost);
+    return BigInt((await this.simulate(tx)).maxCost);
   }
 
-  /** Refuses to send what the pool could not pay for. A dropped pending tx would cost the pool reputation. */
-  async checkSolvency(maxCost: bigint, pay: bigint): Promise<void> {
+  /**
+   * Refuses to send what the pool could not pay for. A dropped pending tx would cost the pool reputation. Counts what this
+   * client already has pending, and `alsoReserved` for withdrawals about to be sent with this one: a public mempool
+   * reserves each pending transaction's maximum cost against the payer's balance.
+   */
+  async checkSolvency(maxCost: bigint, pay: bigint, alsoReserved = 0n): Promise<void> {
     const balance = BigInt(await rpc(this.o.rpc, "eth_getBalance", [this.o.pool, "latest"]));
-    if (balance < maxCost + pay) throw new SolvencyError(`the pool holds ${balance} wei but this withdrawal needs ${maxCost + pay} wei right now: try again shortly`);
+    const pending = this.store.all().reduce((sum, e) => sum + BigInt(e.reserved ?? "0"), 0n) + alsoReserved;
+    const need = maxCost + pay + pending;
+    if (balance < need) throw new SolvencyError(`the pool holds ${balance} wei but this withdrawal needs ${need} wei right now, counting ${pending} wei already pending: try again shortly`);
   }
 
   private pickNote(notes: Note[], amount: bigint, k: bigint, state: PoolState): Note {
@@ -358,14 +376,16 @@ export class Relayless {
     const free = notes.filter((n) => !n.spent && !this.store.get(n.nullifierHash)).sort((a, b) => (a.value < b.value ? 1 : -1));
     if (free.length < payments.length) throw new Error(`this needs ${payments.length} separate notes, and ${free.length} are free`);
     const ready = [];
+    let reserved = 0n;
     for (const [i, p] of payments.entries()) {
       if (free[i].value < p.amount) throw new Error("a note doesn't cover its payment");
-      const { tx, fee, proveMs } = await this.prepare(free[i], p, 0n, state, caps);
+      const { tx, fee, proveMs } = await this.prepare(free[i], p, 0n, state, caps, LIMITS, reserved);
       await this.preflight(tx);
+      reserved += p.amount;
       ready.push({ tx, fee, proveMs, note: free[i], p });
     }
     return Promise.all(ready.map(async ({ tx, fee, proveMs, note, p }) => {
-      const hash = await this.submit(tx, note.nullifierHash, caps);
+      const hash = await this.submit(tx, note.nullifierHash, caps, p.amount);
       return { hash, nullifierHash: note.nullifierHash, recipient: p.to, amount: p.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
     }));
   }
@@ -376,6 +396,7 @@ export class Relayless {
    * is made for those limits and both nodes get those exact bytes. VERIFY, which is what gets judged, is untouched.
    */
   async compareMempools(opts: { to: Address; amount: bigint }): Promise<MempoolComparison> {
+    if (this.profile.submit !== "alt-mempool") throw new Error(`there is no alt mempool on ${this.profile.id}: this comparison needs devnet-8421`);
     await this.unlock();
     const notes = await this.notes();
     const state = this.state!;
@@ -385,17 +406,17 @@ export class Relayless {
     const maxFeePerGas = BigInt(block.baseFeePerGas) * 2n + 2n;
     const { tx } = await this.prepare(note, opts, 0n, state, { maxFeePerGas, maxPriorityFeePerGas: 1n }, DRY_RUN_LIMITS);
 
-    const sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
+    const sim = await this.simulate(tx);
     const verifyGasUsed = sim.frames?.[0]?.gasUsed ? BigInt(sim.frames[0].gasUsed) : null;
 
     let reason: string | null = null;
     let estimate: any = null;
     try {
-      estimate = await rpc(this.o.mempool, "eth_estimateFrameTransactionGas", [toWire(tx)]);
+      estimate = await rpc(this.mempool, "eth_estimateFrameTransactionGas", [toWire(tx)]);
     } catch (e) {
       reason = e instanceof Error ? e.message : String(e);
     }
-    const reputation = await rpc(this.o.mempool, "skandha_explorer_listReputation", [{ limit: 200 }]).catch(() => null);
+    const reputation = await rpc(this.mempool, "skandha_explorer_listReputation", [{ limit: 200 }]).catch(() => null);
     const entry = reputation?.items?.find((x: any) => x.address?.toLowerCase() === this.o.pool.toLowerCase());
     const staked: boolean | null = entry ? Boolean(entry.isStaked) : null;
     return {
@@ -459,7 +480,7 @@ export class Relayless {
   private async send(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps): Promise<WithdrawHandle> {
     const { tx, fee, proveMs } = await this.prepare(note, opts, k, state, caps);
     await this.preflight(tx);
-    const hash = await this.submit(tx, note.nullifierHash, caps);
+    const hash = await this.submit(tx, note.nullifierHash, caps, opts.amount);
     return { hash, nullifierHash: note.nullifierHash, recipient: opts.to, amount: opts.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
   }
 
@@ -491,7 +512,7 @@ export class Relayless {
   }
 
   /** Builds and proves a withdrawal without sending it. */
-  async prepare(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps, limits: FrameLimits = LIMITS): Promise<{ tx: FrameTx; fee: bigint; proveMs: number }> {
+  async prepare(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps, limits: FrameLimits = LIMITS, alsoReserved = 0n): Promise<{ tx: FrameTx; fee: bigint; proveMs: number }> {
     const leaves = state.leaves;
     const { ref, root } = await this.latestRootRef(state);
     const treeLeaves = leaves.slice(0, root.leafCount);
@@ -503,9 +524,9 @@ export class Relayless {
     const base = { pool: this.o.pool, chainId: this.chainId, recipient: opts.to, amount: opts.amount, changeCommitment, nullifierHash: note.nullifierHash, k, refs: asp ? [ref, asp.ref] : [ref], ...caps };
 
     // Fee = the most this can cost, rounded up. The unused part comes back to the recipient from frame 2.
-    const fee = ((await this.maxCostOf(buildWithdrawal({ ...base, fee: opts.amount }, EMPTY_PROOF, limits))) * 101n) / 100n;
+    const fee = ((await this.maxCostOf(buildWithdrawal(this.profile, { ...base, fee: opts.amount }, EMPTY_PROOF, limits))) * 101n) / 100n;
     if (fee >= opts.amount) throw new Error(`the amount must be above the refundable gas deposit of ${fee} wei`);
-    await this.checkSolvency(fee, opts.amount - fee);
+    await this.checkSolvency(fee, opts.amount - fee, alsoReserved);
 
     const params = { ...base, fee };
     const input = {
@@ -513,7 +534,7 @@ export class Relayless {
       nullifierHash: note.nullifierHash.toString(),
       changeCommitment: changeCommitment.toString(),
       withdrawnValue: opts.amount.toString(),
-      sigHash: (BigInt(sigHashOf(buildWithdrawal(params, "0x", limits))) % R).toString(),
+      sigHash: (BigInt(sigHashOf(this.profile, buildWithdrawal(this.profile, params, "0x", limits))) % R).toString(),
       k: k.toString(),
       aspRoot: asp ? BigInt(asp.ref.root).toString() : "0",
       value: note.value.toString(),
@@ -532,38 +553,47 @@ export class Relayless {
     const t = Date.now();
     const { proof } = await this.o.prover.prove("withdraw", input);
     const proveMs = Date.now() - t;
-    return { tx: buildWithdrawal(params, encodeProof(proof), limits), fee, proveMs };
+    return { tx: buildWithdrawal(this.profile, params, encodeProof(proof), limits), fee, proveMs };
   }
 
   /** Simulates first: a transaction that would fail must never be broadcast. */
   private async preflight(tx: FrameTx): Promise<void> {
-    let sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
-    // ethrex treats this one as transient, and a young chain can show it after the head has moved on. Nothing has been
-    // broadcast, so waiting a few slots costs no reputation.
-    for (let i = 0; i < PREFLIGHT_RETRIES && /not yet referenceable/.test(sim.executionError ?? ""); i++) {
+    // On a public mempool profile, `valid` is the node's own admission verdict for the validation prefix. On devnet-8421
+    // the canonical rules reject every withdrawal (MAX_VERIFY_GAS), so only execution counts there.
+    const problem = (sim: any): string | null =>
+      sim.executionError ?? (this.profile.submit === "public-mempool" && sim.valid === false ? sim.violation ?? "not valid" : null);
+    let sim = await this.simulate(tx);
+    // ethrex treats a root from the current slot as transient, and a young chain can show it after the head has moved
+    // on. Nothing has been broadcast, so waiting a few slots costs no reputation.
+    for (let i = 0; i < PREFLIGHT_RETRIES && /not yet referenceable|not before the current slot|slot .*not (yet )?(recent|referenceable)|RecentRootSlotNotPast/i.test(problem(sim) ?? ""); i++) {
       await new Promise((r) => setTimeout(r, PREFLIGHT_RETRY_MS));
-      sim = await rpc(this.o.rpc, "ethrex_simulateFrameTransaction", [rawOf(tx), "latest", { trace: false }]);
+      sim = await this.simulate(tx);
     }
-    if (sim.executionError) {
+    const why = problem(sim);
+    if (why) {
       const head = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
-      const refs = (tx as any).recentRootReferences?.map((r: RootRef) => r.slot).join(", ");
-      throw new NotAdmittedError(`simulation failed, not broadcast: ${sim.executionError} (head slot ${BigInt(head.slotNumber)}, root slots ${refs})`);
+      const refs = refsOf(this.profile, tx).map((r) => r.slot).join(", ");
+      throw new NotAdmittedError(`simulation failed, not broadcast: ${why} (head slot ${BigInt(head.slotNumber)}, root slots ${refs})`);
     }
-    // Frame 2 is only the refund: its failure costs nothing but the refund itself.
-    const failed = (sim.frames ?? []).slice(0, 2).findIndex((f: any) => !f.succeeded);
+    // Everything up to and including the SENDER frame must succeed. A refund frame after it costs nothing but the refund.
+    const failed = (sim.frames ?? []).slice(0, verifyIndex(this.profile) + 2).findIndex((f: any) => !f.succeeded);
     if (failed >= 0) throw new NotAdmittedError(`simulation failed at frame ${failed}, not broadcast`);
   }
 
   /** Sends once and records it. Never retries: if this throws, the transaction was refused, not lost. */
-  private async submit(tx: FrameTx, nh: bigint, caps: FeeCaps): Promise<Hex> {
+  /** `reserved`: what a public mempool holds against the pool's balance while this is pending, its fee plus its payment. */
+  private async submit(tx: FrameTx, nh: bigint, caps: FeeCaps, reserved: bigint): Promise<Hex> {
     let hash: Hex;
     try {
-      hash = await rpc<Hex>(this.o.mempool, "eth_sendFrameTransaction", [toWire(tx)]);
+      hash =
+        this.profile.submit === "alt-mempool"
+          ? await rpc<Hex>(this.mempool, "eth_sendFrameTransaction", [toWire(tx)])
+          : await rpc<Hex>(this.mempool, "eth_sendRawTransaction", [rawOf(this.profile, tx)]);
     } catch (e) {
       if (e instanceof RpcError) throw new NotAdmittedError(e.message);
       throw e; // A network failure leaves the outcome unknown, so the caller must not assume it can resend.
     }
-    this.store.set({ nullifierHash: nh.toString(), txHash: hash, sentAt: Date.now(), maxFeePerGas: caps.maxFeePerGas.toString(), maxPriorityFeePerGas: caps.maxPriorityFeePerGas.toString() });
+    this.store.set({ nullifierHash: nh.toString(), txHash: hash, sentAt: Date.now(), maxFeePerGas: caps.maxFeePerGas.toString(), maxPriorityFeePerGas: caps.maxPriorityFeePerGas.toString(), reserved: reserved.toString() });
     return hash;
   }
 
@@ -605,7 +635,7 @@ export class Relayless {
     const treeLeaves = state.leaves.slice(0, root.leafCount);
     const caps = await this.feeCaps();
     const base = { pool: this.o.pool, chainId: this.chainId, label: note.label, value: note.value, nullifierHash: note.nullifierHash, ref, ...caps };
-    const fee = ((await this.maxCostOf(buildRagequit({ ...base, fee: note.value }, EMPTY_PROOF))) * 101n) / 100n;
+    const fee = ((await this.maxCostOf(buildRagequit(this.profile, { ...base, fee: note.value }, EMPTY_PROOF))) * 101n) / 100n;
     if (fee >= note.value) throw new Error("this note is smaller than the gas deposit");
     await this.checkSolvency(fee, note.value - fee);
     const params = { ...base, fee };
@@ -615,7 +645,7 @@ export class Relayless {
       nullifierHash: note.nullifierHash.toString(),
       label: note.label.toString(),
       value: note.value.toString(),
-      sigHash: (BigInt(sigHashOf(buildRagequit(params, "0x"))) % R).toString(),
+      sigHash: (BigInt(sigHashOf(this.profile, buildRagequit(this.profile, params, "0x"))) % R).toString(),
       nullifier: note.nullifier.toString(),
       secret: note.secret.toString(),
       treeRoot: root.treeRoot.toString(),
@@ -623,9 +653,9 @@ export class Relayless {
       leafIndex: note.leafIndex.toString(),
       siblings: siblings(treeLeaves, note.leafIndex).map(String),
     });
-    const tx = buildRagequit(params, encodeProof(proof));
+    const tx = buildRagequit(this.profile, params, encodeProof(proof));
     await this.preflight(tx);
-    const hash = await this.submit(tx, note.nullifierHash, caps);
+    const hash = await this.submit(tx, note.nullifierHash, caps, note.value);
     return { hash, nullifierHash: note.nullifierHash, recipient: note.depositor, amount: note.value, fee, proveMs: Date.now() - t, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
   }
 

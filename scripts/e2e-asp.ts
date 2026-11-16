@@ -2,7 +2,7 @@
 // The ASP here is a plain local key behind the SDK's AssociationSetProvider interface, as any third-party ASP would be.
 import { concat, keccak256, numberToHex, parseEther, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { NotAdmittedError, NotApprovedError, Relayless, checkRecentRoot, fileProver, publishedSetProvider, rootOf, siblings, type AssociationSetProvider } from "@relayless/sdk";
+import { NotAdmittedError, NotApprovedError, Relayless, checkRecentRoot, profileOf, fileProver, publishedSetProvider, rootOf, siblings, type AssociationSetProvider } from "@relayless/sdk";
 import { CIRCUITS, balanceOf, fundedKey, loadConfig, localSigner, mined, rpc, stopWorkers } from "./lib.js";
 
 const SALT = keccak256(toHex("relayless.asp"));
@@ -36,7 +36,7 @@ async function publish(labels: bigint[]) {
   }
 }
 
-const connect = (key: Hex, p: AssociationSetProvider = provider) => Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, asp: p });
+const connect = (key: Hex, p: AssociationSetProvider = provider) => Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, profile: cfg.profile, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, asp: p });
 const aliceKey = await fundedKey(cfg, deployerKey, "alice", parseEther("1"));
 const bobKey = await fundedKey(cfg, deployerKey, "bob", parseEther("1"));
 const alice = await connect(aliceKey);
@@ -46,7 +46,7 @@ await mined(cfg, (await bob.deposit({ amount: parseEther("0.2") })).hash);
 const aliceNote = (await alice.notes())[0];
 const bobNote = (await bob.notes())[0];
 await publish([aliceNote.label]);
-check("the provider's source is the one the pool accepts, and its root is on the chain", (await provider.sourceId()) === cfg.aspSourceId && (await checkRecentRoot(cfg.rpc, (await provider.currentRoot())!)).status === "verified");
+check("the provider's source is the one the pool accepts, and its root is on the chain", (await provider.sourceId()) === cfg.aspSourceId && (await checkRecentRoot(cfg.rpc, (await provider.currentRoot())!, profileOf(cfg.profile).recentRoot)).status === "verified");
 
 const to = alice.freshAddress(0);
 const h = await alice.withdraw({ to, amount: parseEther("0.05") });

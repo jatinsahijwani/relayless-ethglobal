@@ -1,13 +1,14 @@
 // EIP-8272 recent roots, read straight from the predeploy's storage. Nothing here trusts whoever published a root: a
 // client can confirm that the chain holds exactly (source, slot, root) before proving against it.
 //
-// Devnet profile: the storage layout below was read from the predeploy's bytecode on ethrex `9aa3645d`. It has no
-// getter, but its layout is deterministic. The current EIP text moves the predeploy and reads roots through a VERIFY
-// frame instead: see docs/spec-port.md.
+// The storage layout below was read from the predeploy's bytecode on ethrex `9aa3645d`, and is the same in ethrex
+// `64b8fc09` (chain 8141) and in the current EIP-8272 text: only the contract's address moves between spec profiles, so
+// callers pass their profile's `recentRoot`. It has no getter, but its layout is deterministic.
 import { concat, keccak256, numberToHex, type Address, type Hex } from "viem";
 import { rpc } from "./chain.js";
 import type { RootRef } from "./frame.js";
 
+/** The recent-root contract on devnet-8421 and hegota-8141. Use your profile's `recentRoot`. */
 export const RECENT_ROOT_ADDRESS: Address = "0x0000000000000000000000000000000000008272";
 const VALUE_TAG: Hex = "0x8f42481679c8e6fefa040974b3c905e0ce3f2e464ba93acdb074a41181617efc";
 const KEY_TAG: Hex = "0xbdc897da2177d260ff5f4be5d4b2aad43f89c3347a305b584fa5a2546d053daa";
@@ -30,12 +31,12 @@ export type RootCheck =
   | { status: "unreachable" };
 
 /** Tests a root reference against the chain. Never reports "verified" unless the chain says so. */
-export async function checkRecentRoot(rpcUrl: string, ref: RootRef): Promise<RootCheck> {
+export async function checkRecentRoot(rpcUrl: string, ref: RootRef, recentRoot: Address = RECENT_ROOT_ADDRESS): Promise<RootCheck> {
   let stored: Hex;
   let headSlot: bigint;
   try {
     headSlot = BigInt((await rpc<any>(rpcUrl, "eth_getBlockByNumber", ["latest", false])).slotNumber);
-    stored = await rpc<Hex>(rpcUrl, "eth_getStorageAt", [RECENT_ROOT_ADDRESS, recentRootKey(ref.sourceId, ref.slot), "latest"]);
+    stored = await rpc<Hex>(rpcUrl, "eth_getStorageAt", [recentRoot, recentRootKey(ref.sourceId, ref.slot), "latest"]);
   } catch {
     return { status: "unreachable" };
   }

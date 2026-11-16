@@ -17,7 +17,8 @@ export default defineConfig({
       pool: cfg.pool,
       walletRpc: cfg.rpc,
       rpc: isLocal ? "/chain" : cfg.rpc,
-      mempool: isLocal ? "/mempool" : cfg.mempool,
+      mempool: cfg.mempool ? (isLocal ? "/mempool" : cfg.mempool) : isLocal ? "/chain" : cfg.rpc,
+      profile: cfg.profile ?? "devnet-8421",
       explorer: cfg.explorer ?? null,
       feeRange: cfg.feeRange ?? null,
       aspUrl: cfg.aspUrl ? (isLocal ? "/asp" : cfg.aspUrl) : null,
@@ -30,7 +31,7 @@ export default defineConfig({
     proxy: isLocal
       ? {
           "/chain": { target: cfg.rpc, changeOrigin: true, rewrite: () => "/" },
-          "/mempool": { target: cfg.mempool, changeOrigin: true, rewrite: () => "" },
+          ...(cfg.mempool ? { "/mempool": { target: cfg.mempool, changeOrigin: true, rewrite: () => "" } } : {}),
           ...(cfg.aspUrl ? { "/asp": { target: cfg.aspUrl, changeOrigin: true, rewrite: (p: string) => p.replace(/^\/asp/, "") } } : {}),
         }
       : undefined,

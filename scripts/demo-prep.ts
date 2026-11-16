@@ -4,7 +4,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { encodeFunctionData, parseEther, type Hex } from "viem";
-import { POOL_ABI, checkRecentRoot } from "@relayless/sdk";
+import { POOL_ABI, checkRecentRoot, profileOf } from "@relayless/sdk";
 import { balanceOf, connect, rpc, stopWorkers } from "./lib.js";
 import { fetchPoolState } from "../packages/sdk/src/chain.js";
 import { DEMO_NETWORK, SEED_COUNT, aspSet, cfg, readDemoWallet, seedAddress } from "./demo-lib.js";
@@ -106,7 +106,7 @@ await check("Web app responds, on the demo pool", async () => {
 await check("ASP's current root is on the chain", async () => {
   const set = await aspSet();
   if (!set.ref) return { ok: false, detail: "nothing approved yet", fix: resetFix };
-  const r = await checkRecentRoot(cfg.rpc, { sourceId: set.ref.sourceId, slot: BigInt(set.ref.slot), root: set.ref.root });
+  const r = await checkRecentRoot(cfg.rpc, { sourceId: set.ref.sourceId, slot: BigInt(set.ref.slot), root: set.ref.root }, profileOf(cfg.profile).recentRoot);
   return { ok: r.status === "verified", detail: `recent-root check: ${r.status}`, fix: r.status === "verified" ? undefined : resetFix };
 });
 
