@@ -1,0 +1,98 @@
+name: ci
+
+# Unit suites on every push and pull request. The end-to-end suites need a running chain, so they run per spec profile
+# on demand and nightly: hegota-8141 on a local ethrex 64b8fc09 (built from source, cached), devnet-8421 on the
+# ERC-8421 sidecar stack (Docker; frame transactions activate about 11 minutes after genesis).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+env:
+  CIRCOM_VERSION: v2.2.3
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: circom
+        run: |
+          curl -fsSL -o /usr/local/bin/circom https://github.com/iden3/circom/releases/download/$CIRCOM_VERSION/circom-linux-amd64
+          chmod +x /usr/local/bin/circom
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:circuits
+      - run: pnpm test:circuits
+      - run: pnpm build:contracts
+      - run: pnpm test:contracts
+      - run: pnpm test:sdk
+      - run: pnpm test:asp
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  e2e:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [hegota-8141, devnet-8421]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: circom
+        run: |
+          curl -fsSL -o /usr/local/bin/circom https://github.com/iden3/circom/releases/download/$CIRCOM_VERSION/circom-linux-amd64
+          chmod +x /usr/local/bin/circom
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:circuits
+
+      - name: cache ethrex 64b8fc09
+        if: matrix.profile == 'hegota-8141'
+        uses: actions/cache@v4
+        with:
+          path: .relayless/hegota-stack/ethrex/target/release/ethrex
+          key: ethrex-64b8fc09-${{ hashFiles('patches/ethrex-dev-hegota.patch') }}
+      - name: hegota-8141 suites
+        if: matrix.profile == 'hegota-8141'
+        run: |
+          scripts/local-stack-hegota.sh
+          set -a; . .relayless/hegota-stack/keys.env; set +a
+          pnpm e2e local-hegota
+          scripts/setup-asp.sh local-hegota .relayless/hegota-stack/keys.env
+          pnpm e2e:asp local-hegota-asp
+          npx tsx scripts/adversarial.ts local-hegota
+          npx tsx scripts/gas-floors.ts local-hegota
+
+      - name: devnet-8421 suites
+        if: matrix.profile == 'devnet-8421'
+        run: |
+          scripts/local-stack.sh
+          set -a; . ./.env; set +a
+          pnpm e2e local
+          scripts/setup-asp.sh local
+          pnpm e2e:asp local-asp
+          npx tsx scripts/adversarial.ts local
+          npx tsx scripts/gas-floors.ts local
