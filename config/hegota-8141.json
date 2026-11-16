@@ -1,0 +1,8 @@
+{
+  "name": "hegota-8141",
+  "profile": "hegota-8141",
+  "chainId": 8141,
+  "rpc": "https://rpc1.privacy.ethrex.xyz",
+  "explorer": "https://dora.privacy.ethrex.xyz",
+  "reserveEth": "0.02"
+}
