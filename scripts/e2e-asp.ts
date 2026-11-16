@@ -6,7 +6,10 @@ import { NotAdmittedError, NotApprovedError, Relayless, checkRecentRoot, profile
 import { CIRCUITS, balanceOf, fundedKey, loadConfig, localSigner, mined, rpc, stopWorkers } from "./lib.js";
 
 const SALT = keccak256(toHex("relayless.asp"));
-const cfg = loadConfig("local-asp");
+// usage: tsx scripts/e2e-asp.ts [network], default local-asp. The network's config names its spec profile.
+const cfg = loadConfig(process.argv[2] ?? "local-asp");
+const RECENT_ROOT = profileOf(cfg.profile).recentRoot;
+const RECENT_ROOT_FRAME = profileOf(cfg.profile).rootCarrier === "frame";
 const deployerKey = process.env.DEPLOYER_KEY as Hex;
 const aspKey = process.env.ASP_KEY as Hex;
 const asp = privateKeyToAccount(aspKey);
@@ -25,7 +28,7 @@ async function publish(labels: bigint[]) {
   approved = labels;
   const root = numberToHex(rootOf(labels), { size: 32 });
   const nonce = Number(await rpc(cfg.rpc, "eth_getTransactionCount", [asp.address, "pending"]));
-  const raw = await asp.signTransaction({ chainId: cfg.chainId, nonce, to: "0x0000000000000000000000000000000000008272", data: concat([SALT, root]), gas: 400_000n, gasPrice: 2_000_000_000n, type: "legacy" });
+  const raw = await asp.signTransaction({ chainId: cfg.chainId, nonce, to: RECENT_ROOT, data: concat([SALT, root]), gas: 400_000n, gasPrice: 2_000_000_000n, type: "legacy" });
   const r = await mined(cfg, await rpc<Hex>(cfg.rpc, "eth_sendRawTransaction", [raw]));
   const block = await rpc(cfg.rpc, "eth_getBlockByNumber", [r.blockNumber, false]);
   ref = { sourceId: SOURCE, slot: BigInt(block.slotNumber), root };
@@ -46,12 +49,12 @@ await mined(cfg, (await bob.deposit({ amount: parseEther("0.2") })).hash);
 const aliceNote = (await alice.notes())[0];
 const bobNote = (await bob.notes())[0];
 await publish([aliceNote.label]);
-check("the provider's source is the one the pool accepts, and its root is on the chain", (await provider.sourceId()) === cfg.aspSourceId && (await checkRecentRoot(cfg.rpc, (await provider.currentRoot())!, profileOf(cfg.profile).recentRoot)).status === "verified");
+check("the provider's source is the one the pool accepts, and its root is on the chain", (await provider.sourceId()) === cfg.aspSourceId && (await checkRecentRoot(cfg.rpc, (await provider.currentRoot())!, RECENT_ROOT)).status === "verified");
 
 const to = alice.freshAddress(0);
 const h = await alice.withdraw({ to, amount: parseEther("0.05") });
 const r = await h.wait();
-check("a note in the approved set withdraws privately, with two root references", r?.status === "0x1" && (await balanceOf(cfg, to)) > parseEther("0.049"), `verify gas ${Number(r.frameReceipts[0].gasUsed)}`);
+check("a note in the approved set withdraws privately, with two root references", r?.status === "0x1" && (await balanceOf(cfg, to)) > parseEther("0.049"), RECENT_ROOT_FRAME ? `root frame ${Number(r.frameReceipts[0].gasUsed)} gas, verify ${Number(r.frameReceipts[1].gasUsed)}` : `verify gas ${Number(r.frameReceipts[0].gasUsed)}`);
 
 const changeNote = (await alice.notes()).find((n) => !n.spent)!;
 const h2 = await alice.withdraw({ to: alice.freshAddress(1), amount: parseEther("0.05"), note: changeNote });

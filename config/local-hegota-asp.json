@@ -1,0 +1,8 @@
+{
+  "name": "local-hegota-asp",
+  "profile": "hegota-8141",
+  "chainId": 81410,
+  "rpc": "http://127.0.0.1:18645",
+  "reserveEth": "1",
+  "aspUrl": "http://127.0.0.1:8790"
+}

@@ -23,3 +23,7 @@ packages/contracts/generated/
 apps/web/public/demo-wallet.json
 .asp2.log
 .e2e-asp.log
+.e2e-*.log
+.adversarial-*.log
+.relayless-adversarial-*.json
+.relayless-gas-floors-*.json
