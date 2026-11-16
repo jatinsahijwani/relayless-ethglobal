@@ -28,3 +28,4 @@ apps/web/public/demo-wallet.json
 .relayless-adversarial-*.json
 .relayless-gas-floors-*.json
 .relayless-testnet-local*.json
+.testnet-run.log
