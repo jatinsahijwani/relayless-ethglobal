@@ -1,5 +1,5 @@
-// Shared by the demo scripts. The demo pool is the allowlist ASP's pool: approving a depositor there is that ASP's stated
-// policy, so demo data never appears under the World ID ASP's name.
+// Shared by the demo scripts. The demo pool is the association-set pool, whose reference ASP is an allowlist: approving a
+// depositor there is that ASP's stated policy.
 import { existsSync, readFileSync } from "node:fs";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -13,7 +13,7 @@ if (existsSync(".env")) {
   }
 }
 
-export const DEMO_NETWORK = process.env.RELAYLESS_NETWORK ?? "local-asp2";
+export const DEMO_NETWORK = process.env.RELAYLESS_NETWORK ?? "local-asp";
 export const cfg = loadConfig(DEMO_NETWORK);
 export const SEED_COUNT = 56;
 /** Served only by the local dev server, and ignored by git. A throwaway devnet key: never shown on screen or logged. */
@@ -30,7 +30,7 @@ export const aspUrl = (): string => {
   return cfg.aspUrl;
 };
 
-export async function aspSet(): Promise<{ labels: string[]; ref: { slot: string; root: Hex } | null }> {
+export async function aspSet(): Promise<{ sourceId: Hex; labels: string[]; ref: { sourceId: Hex; slot: string; root: Hex } | null }> {
   const res = await fetch(`${aspUrl()}/set`);
   if (!res.ok) throw new Error(`the ASP answered ${res.status}`);
   return res.json();
@@ -38,8 +38,8 @@ export async function aspSet(): Promise<{ labels: string[]; ref: { slot: string;
 
 /** Approves depositors on the demo pool's ASP. Resolves once the new root is usable on the chain. */
 export async function allow(depositors: Address[]): Promise<void> {
-  const operatorKey = process.env.ASP2_KEY as Hex;
-  if (!operatorKey) throw new Error("set ASP2_KEY");
+  const operatorKey = process.env.ASP_KEY as Hex;
+  if (!operatorKey) throw new Error("set ASP_KEY");
   const signature = await privateKeyToAccount(operatorKey).signMessage({ message: allowMessage(cfg.pool, depositors) });
   const res = await fetch(`${aspUrl()}/allow`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ depositors, signature }) });
   if (!res.ok) throw new Error(`the ASP refused: ${(await res.json()).message}`);
