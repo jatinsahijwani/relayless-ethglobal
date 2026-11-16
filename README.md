@@ -1,5 +1,7 @@
 # Relayless
 
+🥇 1st place, EF: Best use of the Frame Transaction Alternative Mempool, ETHGlobal Mumbai 2026. The hackathon version is tagged `v1.0-ethglobal-mumbai`.
+
 **Pay anyone privately, from a wallet with no history. No relayer. It tells you how hidden you are before you pay.**
 
 - **What:** a privacy pool that pays gas from the note being withdrawn, so a brand-new wallet holding 0 ETH can receive money with nobody funding it, using EIP-8141 frame transactions and the alt mempool.

@@ -1,8 +1,29 @@
-# Progress: final status
+# Progress
+
+## Stage 2: refocus (branch `refocus`, started 2026-11-16)
+The positioning is `docs/landscape.md`. The hackathon version stays reachable at the tag `v1.0-ethglobal-mumbai`, and everything below the Stage 2 sections describes it.
+
+### Part 1: lock the hackathon version
+| Step | State |
+|---|---|
+| `main` matches what was judged | Yes. Local `main`, `origin/main` and GitHub's API all point to `8262d04` (2026-11-07 01:08 IST), the last commit before today |
+| Tag `v1.0-ethglobal-mumbai` | Created locally, annotated, on `8262d04`. **Not pushed:** waiting for the author |
+| README award line | Added on `refocus` |
+| ENS deployer roles | **Still held. Revocation prepared, not sent:** waiting for the author |
+
+**ENS roles, read from Sepolia on 2026-11-16.** The deployer is `0x04f1D2215933f26f07c343511a7E05717273e6BE`.
+- `relayless` in the .eth registry `0xd4eb…a8b4`: it holds `SET_SUBREGISTRY` and `SET_RESOLVER`, plus the admin bits for `SET_SUBREGISTRY`, `SET_RESOLVER` and `CAN_TRANSFER_ADMIN` (bitmap `0x1110…01100000`).
+- `asp` in R1 `0xa301…87F2`: it holds `SET_SUBREGISTRY` and its admin bit (bitmap `0x1000…00100000`).
+
+**The prepared revocation:** `revokeRoles(tokenId, SET_SUBREGISTRY | ADMIN(SET_SUBREGISTRY), deployer)`, sent once on each registry. Both pass `eth_call` from the deployer and are estimated at 196,633 and 212,780 gas. They're irreversible. `SET_RESOLVER` on `relayless` isn't part of the brief's "subregistry roles", so it's left for the author to decide.
+
+**Working setup:** the submitted repo is `relayless-ethglobal`, not the older `relayless` folder. GitHub is reached over HTTPS through `gh`, because a global `insteadOf` rule rewrites `https://github.com/` to SSH and no SSH key is loaded.
+
+## Hackathon status (as judged)
 
 Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. The alt mempool authors confirmed a local sidecar is fine for judging.
 
-## What works
+### What works
 | What | Evidence |
 |---|---|
 | Withdrawal to a 0-ETH wallet: no relayer, pool pays gas from the note | `scripts/e2e.ts`, browser run below, [gas report](docs/gas-report.md) |
@@ -17,7 +38,7 @@ Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar wi
 | Nym route for ENS reads, off by default | [Below](#nym-mixnet), [notes](docs/nym-notes.md) |
 | Findings, each reproducible | [Repro](docs/repro-gateway.md), [upstream write-up](docs/upstream-pr.md), [analysis](docs/reputation-analysis.md) |
 
-## Test results
+### Test results
 Every suite was run on 2026-11-06, after the demo aids were added.
 
 | Suite | Result |
@@ -39,7 +60,7 @@ Every suite was run on 2026-11-06, after the demo aids were added.
 
 With the optional fee-bump limit on, `scripts/e2e.ts` last passed 30/30, on an earlier run with fewer checks.
 
-## Browser runs
+### Browser runs
 | Run | Result |
 |---|---|
 | Whole demo path at 1280×720 and 390px: 0 ETH to 0.05 ETH, proving counter, compare panel, 3 pending at once, meter | Worked. No console errors, no horizontal overflow, only the local app contacted, no key rendered |
@@ -50,7 +71,7 @@ With the optional fee-bump limit on, `scripts/e2e.ts` last passed 30/30, on an e
 
 These are headless Chromium runs on a laptop. The two Nym off and Nym on runs above were on the previous live build and weren't repeated on this one.
 
-## World ID against the real staging service
+### World ID against the real staging service
 Browser, real World proofs through the simulator, on the local chain:
 
 | Path | Result |
@@ -63,7 +84,7 @@ Browser, real World proofs through the simulator, on the local chain:
 
 The app contacted no outside host until Verify was clicked.
 
-## ENSv2
+### ENSv2
 | Check | Result |
 |---|---|
 | World ID ASP server restarted with a stale record | [Published by itself](https://sepolia.etherscan.io/tx/0x17d50267d237591b0aeefde7df44086601c24440e9b8178454c47c9ec378ea00) |
@@ -71,7 +92,7 @@ The app contacted no outside host until Verify was clicked.
 
 Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd8da7a14f61c6e90709a638b435cf15547ea8ea26d4db37f1b7a08b10a9aaed4), [register `asp`](https://sepolia.etherscan.io/tx/0x498e39e8242fbd46f10d7f54dc6fd5dad48eb45911c3929387aa2c7f90be0d2e), [register `world`](https://sepolia.etherscan.io/tx/0x831d30c21853fda6c58890526bf6550a69169dc709a2d0b23619389e7016c42c), [operator role and records](https://sepolia.etherscan.io/tx/0x77a66869be169e3c0de0344901a9862d5588e4dc08d898ba2e983fd758ad2db5).
 
-## Nym mixnet
+### Nym mixnet
 | Check | Result |
 |---|---|
 | Deployed preview, 6 full runs with Nym on, laptop | 4 worked, 2 ended in the failure message |
@@ -80,14 +101,14 @@ Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd
 | Nym off | Default; 18 MB chunk not fetched, no Nym hosts contacted |
 | Local app with Nym on | Sepolia routed, local chain and approval server direct, verdicts right |
 
-## Griefing, measured
+### Griefing, measured
 | Experiment | Result |
 |---|---|
 | 8 fee bumps from one note, before our fix | `seen` 0 → 8, `included` 1 |
 | Same, after our fix | `seen` 0 → 1, `included` 1 |
 | Same note sent to two nodes, 2 notes, after our fix | Non-mining node: `seen 2, included 0`. **Still open** |
 
-## What's untested
+### What's untested
 - World ID in production, or with a real World App.
 - A real browser wallet: an injected test wallet stood in, on a fork.
 - Claiming through the live page on real Sepolia: the e2e script claimed through the same SDK call.
@@ -100,7 +121,7 @@ Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd
 - Anon-RPC isn't integrated: its docs list no devnet support.
 - ENSIP-26 agent records weren't added.
 
-## Known issues
+### Known issues
 - **The last parent role isn't revoked.** The deployer still holds the subregistry role on `relayless.eth` and `asp`. Revoking it is permanent, so it waits for the author.
 - **ethrex loses block numbers.** On 2 of 2 fresh chains, blocks from about 149 lost their number lookup, about 15 minutes after genesis. Cause unknown. The SDK reads around it and fails loudly if a gap hid pool data. Written up in `docs/upstream-pr.md`.
 - **Griefing across nodes is limited, not solved.**
@@ -111,7 +132,7 @@ Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd
 - Same seed on two devices can still race on one note.
 - A public Sepolia RPC rate-limits the live page, so the console shows 429s that retry.
 
-## Links
+### Links
 **Public devnet** ([explorer](https://explorer.altmempool.wtf/): search by hash, and its history is in memory, so these can disappear):
 - Contract sender with a nonce key and a root reference, block 401126: `0x6f39d1fe8c3828025fe8f21baf3ac012acedc6a2d7b87371eae9f54d62ccef99`
 - Keyed nonces, workshop step 12: `0x8fc566abddd6a77a4dc6fd26eb31285c44eabb4d0df4851495fd7108ea0d2acd`
