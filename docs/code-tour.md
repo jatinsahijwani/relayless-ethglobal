@@ -55,7 +55,7 @@ They're pure, stateless, deterministic and gas-bounded. They read no state anoth
 The floor of 211,828 assumes one public input. We have seven (root commitment, nullifier hash, change commitment, amount, sigHash, k, ASP root), and each extra one costs about 6,645 gas. A delegatecall to the validator costs 2,600, and shape checks add a little. It includes the 20k first-use nonce key.
 
 **11. Why not compress the public inputs?**
-It could save about 40k gas, but SHA-256 in the circuit adds about 60k constraints, roughly 2.7x the proving time. A staked budget has plenty of room, and proving time is what the user feels.
+It's planned, after the spec port. Compressing 7 inputs to 3 saves about 25k gas net. The hybrid scheme (eprint 2025/1500) uses Poseidon in the circuit, so the cost is a few hundred constraints. The hackathon answer here said SHA-256 and 2.7x the proving time, which was wrong. See `DECISIONS.md`.
 
 **12. How serious is the trusted setup?**
 Devnet-grade. Phase 1 is the PSE Perpetual Powers of Tau, but phase 2 is a single local contribution, so anyone with that randomness could forge proofs. That's not acceptable beyond a devnet. The circuits and validator aren't audited either.

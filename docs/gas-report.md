@@ -32,7 +32,7 @@ So the live panel in the app, which reads real receipts and simulations, can sho
 | ERC-8421 draft, staked | 1,000,000 | Yes |
 | Landing page, staked | 2,500,000 | Yes |
 
-The research post's floor is 211,828 gas with a single public input. Ours is higher because each extra input costs about 6,645 gas, a delegatecall to the validator costs 2,600, and the shape checks add a little. See `DECISIONS.md` for why inputs aren't compressed.
+The research post's floor is 211,828 gas with a single public input. Ours is higher because each extra input costs about 6,645 gas, a delegatecall to the validator costs 2,600, and the shape checks add a little. Compressing to 3 inputs is planned after the spec port: see `DECISIONS.md`.
 
 ## Other operations
 | Operation | Gas |

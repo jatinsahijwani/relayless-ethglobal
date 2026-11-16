@@ -35,7 +35,7 @@ Checked 2026-11-16. The plan in `docs/spec-port.md` follows these, not the brief
 - **The testnet's verify budget is 500,000** (`--mempool.max-verify-gas`). The brief's "about 238k" is the reference pool's own declared budget.
 - **The testnet node has no MATCHA width budget.** `64b8fc09` relaxes the one-per-sender rule for disjoint keys instead. MATCHA is in `247e2dd2`.
 - **The EIP texts disagree on `fees`.** EIP-8250's payload block still shows three per-gas fees, and EIP-8141 has a single total `max_fee`. We follow EIP-8141, as Nethermind does.
-- **The hybrid statement compression is Poseidon in the circuit,** so the "Seven public inputs, no compression" reasoning below (SHA-256, about 60k constraints) doesn't hold for it. That decision gets revisited after the port.
+- **The hybrid statement compression is Poseidon in the circuit,** so the hackathon's SHA-256 reason for not compressing was wrong. See "Seven public inputs, not compressed yet" below.
 
 ### Hackathon-only docs removed
 `SUBMISSION.md` and `docs/video-shotlist.md` described the judged entry and would be wrong now. They're in the tag.
@@ -91,8 +91,12 @@ Vanilla solc can't emit frame opcodes; Yul can via `verbatim`. Hardcoding the ke
 ## The snarkjs verifier template isn't used
 `staticcall(sub(gas(), 2000), …)` is rejected (`payer uses banned opcode: GAS`), measured in the Phase 0 spike.
 
-## Seven public inputs, no compression
-Root commitment, nullifier hash, change commitment, amount, sigHash, k, ASP root. Verify frame measures 253,176 gas. Compression could save about 40k, but SHA-256 in the circuit adds about 60k constraints (about 2.7x proving). A staked budget of 1M has plenty of room under the draft's numbers, and 253k **slightly exceeds** the landing page's unstaked 250k, so **the pool must be staked** under either figure.
+## Seven public inputs, not compressed yet
+Root commitment, nullifier hash, change commitment, amount, sigHash, k, ASP root. Each input past the first costs about 6,645 gas of verification. The devnet's VERIFY frame measures 253,176 gas.
+
+**The hackathon reason was wrong.** It said compression needs SHA-256 in the circuit, about 60k constraints and 2.7x the proving time. The hybrid scheme (eprint 2025/1500), which minimal-shielded-pool uses, does without: the validator computes `alpha = keccak(statement) mod r`, the circuit computes `beta = Poseidon(statement)`, and both evaluate the statement polynomial at `alpha + beta`. That's a few hundred constraints on top of 24,965.
+
+**Decision (2026-11-16): compress to 3 inputs, as a separate step after the spec port.** It saves about 25k net, and moves the declared validation budget from about 250k to about 225k, under the 250k Nethermind measured as its limit. It changes the circuit, the zkey, the validator and the SDK at once, so it gets its own measurements and review. It doesn't block the testnet, which admits 500k. The plan is in `docs/spec-port.md` §4.
 
 ## Positional LeanIMT for the k-gate
 0xbow's inclusion proof allows siblings to shift down past empty levels, so a leaf can claim a smaller index under the same root. Harmless for them, since they don't use the index as a claim, but it would bypass our k-gate. `PositionalLeanIMT` adds two constraints per level; a test runs the exact attack. The ASP tree uses the plain version, because only membership matters there.
