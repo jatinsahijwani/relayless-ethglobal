@@ -64,7 +64,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const network = process.env.RELAYLESS_NETWORK ?? "local-asp";
   const cfg = JSON.parse(readFileSync(join(root, `config/${network}.deployed.json`), "utf8"));
   if (!process.env.ASP_KEY) throw new Error("set ASP_KEY");
-  const statePath = join(root, `.relayless/asp-${network}.json`);
+  // Approvals belong to one pool, so a redeployed pool starts clean instead of inheriting another pool's state.
+  const statePath = join(root, `.relayless/asp-${network}-${String(cfg.pool).toLowerCase()}.json`);
   const state: AspState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : emptyState();
   if (!Array.isArray(state.approved)) throw new Error(`${statePath} is from an older ASP version: move it aside and approve again`);
   const operator = privateKeyToAccount(process.env.ASP_KEY as Hex).address;
