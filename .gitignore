@@ -22,3 +22,4 @@ packages/contracts/generated/
 .asp.log
 apps/web/public/demo-wallet.json
 .asp2.log
+.e2e-asp.log
