@@ -7,15 +7,15 @@ The positioning is `docs/landscape.md`. The hackathon version stays reachable at
 | Step | State |
 |---|---|
 | `main` matches what was judged | Yes. Local `main`, `origin/main` and GitHub's API all point to `8262d04` (2026-11-07 01:08 IST), the last commit before today |
-| Tag `v1.0-ethglobal-mumbai` | Created locally, annotated, on `8262d04`. **Not pushed:** waiting for the author |
+| Tag `v1.0-ethglobal-mumbai` | Annotated, on `8262d04`, pushed on the author's go-ahead |
 | README award line | Added on `refocus` |
-| ENS deployer roles | **Still held. Revocation prepared, not sent:** waiting for the author |
+| ENS deployer roles | **Subregistry roles revoked** on the author's go-ahead: [`relayless`](https://sepolia.etherscan.io/tx/0x6beffc108950ff5151d5db1385bc98b1fefb7ae4f71aefe95c10a2da9265894e) (183,842 gas), [`asp`](https://sepolia.etherscan.io/tx/0x009fcc27a0aec74d2372764fcd9433b17ec0d511adc38cd07ae99ba355527bbd) (169,213 gas) |
 
-**ENS roles, read from Sepolia on 2026-11-16.** The deployer is `0x04f1D2215933f26f07c343511a7E05717273e6BE`.
+**ENS roles, as read from Sepolia on 2026-11-16 before revoking.** The deployer is `0x04f1D2215933f26f07c343511a7E05717273e6BE`.
 - `relayless` in the .eth registry `0xd4eb…a8b4`: it holds `SET_SUBREGISTRY` and `SET_RESOLVER`, plus the admin bits for `SET_SUBREGISTRY`, `SET_RESOLVER` and `CAN_TRANSFER_ADMIN` (bitmap `0x1110…01100000`).
 - `asp` in R1 `0xa301…87F2`: it holds `SET_SUBREGISTRY` and its admin bit (bitmap `0x1000…00100000`).
 
-**The prepared revocation:** `revokeRoles(tokenId, SET_SUBREGISTRY | ADMIN(SET_SUBREGISTRY), deployer)`, sent once on each registry. Both pass `eth_call` from the deployer and are estimated at 196,633 and 212,780 gas. They're irreversible. `SET_RESOLVER` on `relayless` isn't part of the brief's "subregistry roles", so it's left for the author to decide.
+**The prepared revocation:** `revokeRoles(tokenId, SET_SUBREGISTRY | ADMIN(SET_SUBREGISTRY), deployer)`, sent once on each registry. Both pass `eth_call` from the deployer and are estimated at 196,633 and 212,780 gas. After sending, the deployer's roles on `asp` are `0x0`, and on `relayless` only `SET_RESOLVER`, its admin bit and the `CAN_TRANSFER_ADMIN` admin bit remain (`0x1100…01000000`). It holds no root role on R1 that could grant `SET_SUBREGISTRY` back, both registries still report `isEmancipated() == true`, and both names still point to the same registries. The author chose to keep `SET_RESOLVER`.
 
 **Working setup:** the submitted repo is `relayless-ethglobal`, not the older `relayless` folder. GitHub is reached over HTTPS through `gh`, because a global `insteadOf` rule rewrites `https://github.com/` to SSH and no SSH key is loaded.
 
@@ -122,7 +122,6 @@ Key transactions: [register `relayless.eth`](https://sepolia.etherscan.io/tx/0xd
 - ENSIP-26 agent records weren't added.
 
 ### Known issues
-- **The last parent role isn't revoked.** The deployer still holds the subregistry role on `relayless.eth` and `asp`. Revoking it is permanent, so it waits for the author.
 - **ethrex loses block numbers.** On 2 of 2 fresh chains, blocks from about 149 lost their number lookup, about 15 minutes after genesis. Cause unknown. The SDK reads around it and fails loudly if a gap hid pool data. Written up in `docs/upstream-pr.md`.
 - **Griefing across nodes is limited, not solved.**
 - **The main pool's reputation settles one short:** `seen 31, included 30` after this run, and the same gap of 1 before. **It's unexplained.** The run includes a deliberate fee bump, which may be why.

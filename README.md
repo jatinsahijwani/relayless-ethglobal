@@ -169,7 +169,7 @@ Without ENS there's no way to find an ASP, nothing that shows who may change its
 
 Both registries report `isEmancipated() == true`. Protocol addresses are in [config/ens.sepolia.json](config/ens.sepolia.json).
 
-**Current limit:** the deployer still holds the subregistry role on `relayless.eth` and on `asp`, so it could replace everything beneath them. Removing that role is permanent and hasn't been done yet. Until then, "the parent can't change the root" holds for the current registries, not for a swap of them.
+**Subregistry roles revoked (2026-11-16).** The deployer gave up `SET_SUBREGISTRY` and its admin role on [`relayless.eth`](https://sepolia.etherscan.io/tx/0x6beffc108950ff5151d5db1385bc98b1fefb7ae4f71aefe95c10a2da9265894e) and on [`asp`](https://sepolia.etherscan.io/tx/0x009fcc27a0aec74d2372764fcd9433b17ec0d511adc38cd07ae99ba355527bbd), so nobody can swap the registries beneath them. It still holds `SET_RESOLVER` on `relayless.eth`, which repoints that one name's resolver but can't touch the registries, the ASP records or the receive names.
 
 **The approval endpoint** in the ASP records is `http://127.0.0.1:8790`, because the ASP server runs locally with the devnet.
 
@@ -202,7 +202,7 @@ Both registries report `isEmancipated() == true`. Protocol addresses are in [con
 **What an ASP curator can and can't do:**
 - **Can:** add ASPs to the directory, stop renewing one so it drops out when its name expires, and re-register a label after that, which clients flag because the operator no longer matches the pool.
 - **Can't:** edit an ASP's records, repoint its resolver, remove it early, touch a receive name, or move anyone's money. Public exit never depends on the directory.
-- **Until the last role is revoked:** whoever holds the subregistry role on `relayless.eth` can replace everything beneath it. See [ENSv2](#ensv2) for its current state.
+- **Swap the registries:** nobody can, since the subregistry roles were revoked. See [ENSv2](#ensv2).
 
 ## Limitations
 - **Runs on a patched local sidecar.** The public gateway needs per-entity budgets and precompiles allowed. The same transaction simulates successfully against the public chain, and its gateway refuses it.

@@ -29,7 +29,7 @@ ASP names are non-transferable, so a provider's reputation can't be sold with th
 The operator is a hot key on a server, so its role covers only `asp.root`, `asp.slot` and `asp.policy`. A leaked operator key can publish a wrong root, which the cross-check catches, but it can't change the pool, operator or endpoint records, or the name.
 
 ## Receive names are forever names
-They never expire, and nobody holds `UNREGISTER`, including the owner, so a name can't be released and reclaimed by someone else. **The limit:** "forever" holds inside the registry. A name stops resolving if `relayless.eth` expires, and whoever holds the subregistry role on `relayless.eth` can replace the registry beneath it. Anyone can renew through the registrar, and the role can be revoked. A Foundry test shows both limits instead of hiding them.
+They never expire, and nobody holds `UNREGISTER`, including the owner, so a name can't be released and reclaimed by someone else. **The limit:** "forever" holds inside the registry. A name stops resolving if `relayless.eth` expires, and anyone can renew it through the registrar. The second limit, that whoever held the subregistry role on `relayless.eth` could replace the registry beneath it, ended on 2026-11-16, when the deployer revoked that role on Sepolia. A Foundry test still shows both limits for a fresh deployment, where the role exists until it's revoked.
 
 ## Each person gets their own resolver
 Resolver roles cover every name on an instance, not one name. On a shared resolver, the app key's role would reach everyone's stealth record.
