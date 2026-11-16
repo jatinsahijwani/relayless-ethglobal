@@ -29,6 +29,14 @@ The pool, validator, circuits and ragequit didn't change.
 ### The demo uses one association-set pool
 With World ID gone, the second pool (`local-asp2`, `ASP2_KEY`) existed only to keep demo approvals out of the World ID set. The demo now uses `local-asp`, and its allowlist ASP runs on 8790.
 
+### Live sources differ from the brief (Part 3)
+Checked 2026-11-16. The plan in `docs/spec-port.md` follows these, not the brief:
+- **Chain 8141 doesn't run the current EIP text.** It runs ethrex `64b8fc09`, with the recent-root contract and nonce manager at the old `0x…8272` and `0x…8250`, nothing at the new addresses, and the per-gas fee triple. The brief's "ethrex at the revision chain 8141 uses, or Nethermind master" names two different profiles. Only Nethermind master follows today's texts.
+- **The testnet's verify budget is 500,000** (`--mempool.max-verify-gas`). The brief's "about 238k" is the reference pool's own declared budget.
+- **The testnet node has no MATCHA width budget.** `64b8fc09` relaxes the one-per-sender rule for disjoint keys instead. MATCHA is in `247e2dd2`.
+- **The EIP texts disagree on `fees`.** EIP-8250's payload block still shows three per-gas fees, and EIP-8141 has a single total `max_fee`. We follow EIP-8141, as Nethermind does.
+- **The hybrid statement compression is Poseidon in the circuit,** so the "Seven public inputs, no compression" reasoning below (SHA-256, about 60k constraints) doesn't hold for it. That decision gets revisited after the port.
+
 ### Hackathon-only docs removed
 `SUBMISSION.md` and `docs/video-shotlist.md` described the judged entry and would be wrong now. They're in the tag.
 

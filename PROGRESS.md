@@ -53,6 +53,15 @@ Done on `refocus`. Details and reasons are in `DECISIONS.md` under Stage 2.
 - The ASP's state file is now keyed by pool address. The old one, `.relayless/asp-local-asp.json`, belonged to the previous chain's pool, and the server refused it. It's left in place.
 - Docker Desktop was started for the stack, and it restarted other containers on this machine (nitia, zebra-testnet, lightwalletd and others). They're still running.
 
+### Part 3: the spec-port plan
+`docs/spec-port.md`, written and committed. **Waiting for the author's go-ahead before Part 4.**
+
+What it found, in short:
+- **Three profiles, not two:** `devnet-8421` (sidecar), `hegota-8141` (chain 8141, ethrex `64b8fc09`), and `eips-current` (Nethermind master).
+- **The sidecar and hegota-support speak only the devnet profile.**
+- **The verification estimate** is about 250k declared, and compression would save about 25k.
+- **The risks** are funding on chain 8141, standing up the two client stacks, the ethrex-only simulation RPC, and re-measuring the SENDER state pin.
+
 ## Hackathon status (as judged)
 
 Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. The alt mempool authors confirmed a local sidecar is fine for judging.
