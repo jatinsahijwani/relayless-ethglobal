@@ -605,10 +605,11 @@ export class Relayless {
         this.store.delete(nh);
         return receipt;
       }
-      // A fee bump can replace this hash, and the nullifier landing is what matters.
+      // A fee bump can replace this hash, and the nullifier landing is what matters. It may also have landed between
+      // the two reads, so look for this hash's receipt once more before reporting it replaced.
       if (await this.isSpent(nh)) {
         this.store.delete(nh);
-        return null;
+        return rpc(this.o.rpc, "eth_getTransactionReceipt", [hash]);
       }
       await new Promise((r) => setTimeout(r, 1500));
     }
