@@ -62,6 +62,61 @@ What it found, in short:
 - **The verification estimate** is about 250k declared, and compression would save about 25k.
 - **The risks** are funding on chain 8141, standing up the two client stacks, the ethrex-only simulation RPC, and re-measuring the SENDER state pin.
 
+### Part 4: the port, to two profiles
+Done on `refocus`, with the author's decisions: two profiles now (`devnet-8421`, `hegota-8141`), a table ready for `eips-current`, a local ethrex `64b8fc09` chain only, and compression after the port. Reasons are in `DECISIONS.md`. Gas figures are in `docs/gas-report.md`.
+
+| What | State |
+|---|---|
+| Profile table | `packages/sdk/src/profiles.ts`, and the validator generator's `PROFILES`. A pool's config names its profile |
+| `hegota-8141` codec | Ours. Pinned to ethrex's golden vector, and the live chain 8141 node decodes it |
+| Validator | One generator, one build per profile. The `devnet-8421` build is semantically unchanged |
+| Pool contract | Recent-root contract and staking registry are constructor arguments |
+| Local `hegota-8141` chain | `scripts/local-stack-hegota.sh`: ethrex `64b8fc09` in dev mode, plus a dev-producer-only patch |
+| SENDER floors re-measured | Execution 861,786 of 1,500,000 at full depth. State: at most 566,100 seen, of 1,000,000. Minimums unchanged |
+| Hostile recipients | `scripts/adversarial.ts`, 10 cases, each a real withdrawal |
+| CI | `.github/workflows/ci.yml`: unit suites on every push, both profiles' e2e on demand and nightly. **Not yet run on GitHub**, because the branch isn't pushed |
+| Compression docs | The wrong SHA-256 reason is corrected in `DECISIONS.md`, `docs/code-tour.md` and `docs/gas-report.md`. The README never gave it |
+
+**Test results, 2026-11-16:**
+
+| Suite | `devnet-8421` | `hegota-8141` |
+|---|---|---|
+| Circuits | 13/13 (shared) | |
+| Contracts (Foundry; fuzz at 10,000 runs) | 29/29 (shared; 3 new tests for the constructor) | |
+| SDK | 39/39 (shared; 10 new: codec, profiles, frame layout) | |
+| ASP server | 15/15 (shared) | |
+| `scripts/e2e.ts` | **34/34** | **32/32**. The two alt mempool checks become public-mempool checks |
+| `scripts/e2e-asp.ts` | **10/10** | **10/10** |
+| `scripts/adversarial.ts` (new) | **10/10** | **10/10** |
+| `scripts/gas-floors.ts` (new) | pass: 861,779 | pass: 861,786 |
+| `pnpm typecheck`, `pnpm build` | clean | |
+
+**New gas figures, `hegota-8141`:**
+- Recent-root frame: 5,579 (one root) or 8,010 (two).
+- Pool VERIFY frame: 233,383, plus 97,920 state for the nullifier slot.
+- Validation used: 238,962. Declared: 308,100.
+- SENDER frame: 183,810–230,515 execution, plus 379,440–477,360 state.
+- Total, fresh recipient: about 980,000–1,030,000.
+
+**Things I noticed:**
+- At `64b8fc09`, ethrex's dev mode can't produce Hegotá blocks without the patch, though its docs say `--dev` stays available.
+- The fee-bump check passes on `hegota-8141` without bumping anything: blocks every ~2 s mine the first transaction before the bump. It's exercised on `devnet-8421`.
+- The unrelated Docker containers were stopped on the author's request (stopped, not removed). The Relayless devnet and its sidecar are still running, and so is the local `hegota-8141` node (`pkill -f 'ethrex.*hegota-stack'` stops it).
+- The old `packages/contracts/generated/validator.json` (git-ignored) is no longer read, and was left on disk.
+
+### Part 5: prepared, waiting for funds
+Everything up to spending is done and rehearsed. The sequence is in `docs/testnet-run.md`.
+
+| What | State |
+|---|---|
+| Network | Chain 8141: RPC `rpc1.privacy.ethrex.xyz` (open), explorer [Dora](https://dora.privacy.ethrex.xyz), faucet at faucet.privacy.ethrex.xyz (not used) |
+| Admission | Permissionless transactions, 500,000 verify budget, relaxed per-sender rule for disjoint keys, no MATCHA width budget |
+| `scripts/testnet-key.sh` | Fresh throwaway key in `.env.hegota-8141` (git-ignored). **Not created yet** |
+| `scripts/testnet-preflight.ts` | **Passes against chain 8141**, read-only: chain id, client `64b8fc09`, recent-root code hash, nonce manager, slots, and our encoding decoded by the node |
+| `scripts/testnet-run.ts` | Deposit, private withdrawal to a 0-ETH address, double spend refused, concurrent withdrawals, ragequit. **Rehearsed 5/5 on the local `hegota-8141` chain** |
+| README "Public testnet" | Skeleton, to fill from the run's output |
+| Funds needed | About 0.15 ETH on chain 8141 |
+
 ## Hackathon status (as judged)
 
 Last checked 2026-11-06, on the running stack: ethrex `9aa3645d` plus sidecar with `patches/sidecar-budget-010.patch` and a `precompiles` config. The alt mempool authors confirmed a local sidecar is fine for judging.

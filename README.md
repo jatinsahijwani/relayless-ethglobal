@@ -12,10 +12,11 @@
 
 | Part | What's real | Where it runs |
 |---|---|---|
-| Core: frame withdrawals, recovery, meter, k-gate | Works end to end, with 34 e2e checks | Local devnet: ethrex `9aa3645d` plus a patched sidecar, which the alt mempool authors confirmed is fine for judging. The public gateway can't admit these yet: see [Findings](#findings-for-the-alt-mempool) |
-| Association sets and public exit | Works with any provider through one SDK interface, with an allowlist ASP as the reference | Local devnet. See [Association sets](#association-sets) |
+| Core: frame withdrawals, recovery, meter, k-gate | Works end to end on both spec profiles: 34 e2e checks on `devnet-8421`, 32 on `hegota-8141` | `devnet-8421`: ethrex `9aa3645d` plus a patched ERC-8421 sidecar (the alt mempool path). `hegota-8141`: a local chain on ethrex `64b8fc09`, the revision the public Hegotá testnet runs. See [Spec profiles](#spec-profiles) |
+| Association sets and public exit | Works with any provider through one SDK interface, with an allowlist ASP as the reference | Both profiles, locally. See [Association sets](#association-sets) |
+| Public testnet (chain 8141) | Deployment prepared, waiting for testnet funds | See [Public testnet](#public-testnet) |
 
-Devnet only. Not audited.
+Testnets and local chains only. Not audited.
 
 ## What you get
 Privacy pools with no relayer have been prototyped. This is the layer that makes one usable:
@@ -61,6 +62,8 @@ EIP-8141 frame transactions let the pool be the sender and pay gas from the note
 
 ![The three frames of a withdrawal](docs/img/frame-layout.png)
 
+On `hegota-8141`, a fourth frame leads: EIP-8272's recent-root verifier, a VERIFY frame to the recent-root contract carrying the roots the proof uses. On `devnet-8421` those roots travel in an envelope field.
+
 | Mechanism | How |
 |---|---|
 | Double spends | The nullifier is an EIP-8250 nonce key, consumed atomically with payment approval. A second spend is an invalid transaction, not a paid failure |
@@ -71,8 +74,18 @@ EIP-8141 frame transactions let the pool be the sender and pay gas from the note
 
 **The most interesting problem is the shared sender.** Reputation drops for every transaction admitted but not mined, and every user shares the pool's. [docs/reputation-analysis.md](docs/reputation-analysis.md) lists every way this can happen, with griefing measurements, what we mitigated, and what needs a rule change.
 
+## Spec profiles
+EIP-8141, EIP-8250 and EIP-8272 are drafts that changed in October 2026, and the chains that run them follow different revisions. A pool is built for one **spec profile**, because its validator's bytecode depends on it:
+
+| Profile | Follows | Where | Withdrawals go to |
+|---|---|---|---|
+| `devnet-8421` | ethrex `9aa3645d`: recent roots in an envelope field | `scripts/local-stack.sh` | The ERC-8421 alt mempool (sidecar), with the pool staked |
+| `hegota-8141` | ethrex `64b8fc09`: EIP-8141 `7d1c8bfb94`, EIP-8250 `f3079a09e8`, EIP-8272 `824cbc0b0e`. Recent roots in a VERIFY frame | `scripts/local-stack-hegota.sh`, and the public chain 8141 | The node's own public mempool, which admits up to 500,000 verify gas. No stake |
+
+The circuits, pool contract, recovery, meter, k-gate and association sets are shared. What differs lives in `packages/sdk/src/profiles.ts` and the validator generator's profile table. A third profile for today's EIP texts (`eips-current`, which only Nethermind master implements) can be added there without touching shared code. Why it isn't built yet, and everything else about the port, is in [docs/spec-port.md](docs/spec-port.md).
+
 ## Run it
-Needs Docker (running), Node, pnpm and Foundry. From a fresh clone, one command brings up a private local chain and the patched alt mempool, then deploys:
+Needs Docker (running), Node, pnpm and Foundry. From a fresh clone, one command brings up a private local chain and the patched alt mempool, then deploys (the `devnet-8421` profile):
 
 ```sh
 scripts/local-stack.sh   # about 13 minutes the first time: frame transactions activate about 11 minutes after genesis
@@ -96,22 +109,34 @@ pnpm demo:prep                              # a green or red line for everything
 
 **Demo data, clearly:** `demo:seed` makes 56 deposits from throwaway keys into that pool, so the meter and dot chart have a crowd. **Those dots are seed data, not users.** They and the demo wallet are approved directly by the allowlist ASP's operator, which is that ASP's stated policy.
 
+**The `hegota-8141` profile, locally.** Needs Rust, Node, pnpm and Foundry, no Docker. The first run builds ethrex `64b8fc09` from source, about 10–20 minutes:
+
+```sh
+scripts/local-stack-hegota.sh                         # ethrex in dev mode, chain id 81410, then deploys
+set -a; . .relayless/hegota-stack/keys.env; set +a
+pnpm e2e local-hegota
+```
+
 Tests:
 
 ```sh
 pnpm test:circuits && pnpm test:contracts && pnpm test:sdk && pnpm test:asp
 pnpm typecheck && pnpm build
 set -a; . ./.env; set +a
-pnpm e2e                 # against the running stack
-pnpm e2e:asp             # the association-set pool, after scripts/setup-asp.sh
+pnpm e2e                                   # against the running stack
+pnpm e2e:asp                               # the association-set pool, after scripts/setup-asp.sh
+npx tsx scripts/adversarial.ts local       # ten hostile recipients, each paid by a real withdrawal
+npx tsx scripts/gas-floors.ts local        # the SENDER frame's worst case at full tree depth
 ```
+
+The same commands take `local-hegota` (and `scripts/setup-asp.sh local-hegota .relayless/hegota-stack/keys.env`, then `pnpm e2e:asp local-hegota-asp`). CI runs the unit suites on every push, and both profiles' end-to-end suites on demand and nightly.
 
 Latest results are in [PROGRESS.md](PROGRESS.md).
 
 SDK:
 
 ```ts
-const rl = await Relayless.connect({ rpc, mempool, pool, signer, prover });
+const rl = await Relayless.connect({ rpc, mempool, profile: "hegota-8141", pool, signer, prover });
 await rl.deposit({ amount });
 await rl.pay({ to, amount, minAnon: 32 });
 const a = await rl.anonymity({ amount }); // { minEntropyBits, shannonBits, setSize, advice }
@@ -127,6 +152,22 @@ A pool can require that a note's label is in an approved set before it leaves pr
 - **Checked before sending.** The SDK refuses a provider whose source isn't the pool's, and a proof that doesn't reach its root. It simulates before broadcasting, so a root the chain doesn't hold is caught without costing the pool reputation.
 
 The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sepolia, private receive names, and an optional Nym route. They're in the tag `v1.0-ethglobal-mumbai`, and the Sepolia contracts stay deployed with their subregistry roles revoked.
+
+## Public testnet
+*Not deployed yet: waiting for chain 8141 funds. This section is filled in once the run below is done.*
+
+The Hegotá privacy testnet, chain 8141, run by the ethrex team: RPC `https://rpc1.privacy.ethrex.xyz`, explorer [dora.privacy.ethrex.xyz](https://dora.privacy.ethrex.xyz). The node runs ethrex `64b8fc09`, so the pool uses the `hegota-8141` profile.
+
+| Step | Transaction |
+|---|---|
+| Deploy: Poseidon T3, T4, validator, pool | pending |
+| Deposit | pending |
+| Private withdrawal to a fresh address holding 0 ETH | pending |
+| Double spend of the same note, refused before broadcast | pending (nothing is sent) |
+| Concurrent withdrawals from the one pool sender | pending |
+| Public exit (ragequit) to the depositor | pending |
+
+The run sequence is in [docs/testnet-run.md](docs/testnet-run.md).
 
 ## CROPS
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.
@@ -149,10 +190,11 @@ The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sep
 - **Can't:** approve a label without its root on the chain, forge membership, change the pool's source, touch anyone's money, or block the public exit.
 
 ## Limitations
-- **Runs on a patched local sidecar.** The public gateway needs per-entity budgets and precompiles allowed. The same transaction simulates successfully against the public chain, and its gateway refuses it.
-- **Devnet only.** These EIPs aren't on mainnet, and the devnet predates their current text, for example in how recent roots are carried.
+- **The alt mempool path runs on a patched local sidecar.** The public gateway needs per-entity budgets and precompiles allowed. The same transaction simulates successfully against the public chain, and its gateway refuses it. The `hegota-8141` profile doesn't need the alt mempool, because chain 8141's public mempool admits 500,000 verify gas.
+- **Testnets only.** These EIPs aren't on mainnet. Neither profile follows today's EIP texts exactly: see [Spec profiles](#spec-profiles).
+- **The validation budget is above EIP-8141's 100,000** on every profile: about 308,000 declared and 239,000 used on `hegota-8141`. It needs a node that admits more, as chain 8141 does. Compressing the public inputs, planned next, saves about 25,000.
 - **Not audited.** Groth16 isn't post-quantum. Trusted setup is devnet-grade.
-- **Withdrawals need the pool to be staked** under the ERC draft's budgets, and the stake can't be withdrawn.
+- **On the alt mempool path, withdrawals need the pool to be staked** under the ERC draft's budgets, and the stake can't be withdrawn.
 - **A banned pool blocks everyone at that node**, including public exits, until `seen` decays or you use another node.
 - **One association set provider per pool.** The source is fixed at deployment. A pool taking several providers would need a contract and validator change. Anon-RPC isn't integrated.
 - Proving hasn't been timed on a phone.
@@ -162,7 +204,7 @@ The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sep
 **Fee-bump limit, off by default.** Build the validator with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` to reject max fees outside a fixed range, which caps fee bumps per note. It limits griefing on a node that still counts replacements, but withdrawals stall when the base fee passes the ceiling. See the [analysis](docs/reputation-analysis.md#the-optional-fee-bump-limit).
 
 ## Gas
-A withdrawal to a fresh wallet costs about 900,000 gas, of which **253,176** is verification. Proving takes about 2 s on a laptop. Full figures: [docs/gas-report.md](docs/gas-report.md).
+A withdrawal to a fresh wallet costs about 900,000–950,000 gas on `devnet-8421`, of which about **253,000** is verification. On `hegota-8141` it's about 980,000–1,030,000, of which **238,962** is verification: 5,579 for the recent-root frame and 233,383 for the pool's. The rest of the difference is the nullifier slot's state gas. Proving takes about 2 s on a laptop. Full figures: [docs/gas-report.md](docs/gas-report.md).
 
 ## Prior work
 - [EIP-8141 and minimum required validation budget for privacy applications](https://ethresear.ch/t/eip-8141-and-minimum-required-validation-budget-for-privacy-applications/25889) (mmjahanara): the gas floor and optimizations.
@@ -189,4 +231,4 @@ Third-party work is listed under [Prior work](#prior-work) and [NOTICE.md](NOTIC
 Claude Code was used for implementation, testing and documentation, under the author's direction. The ideas, steps and detailed specifications came from the author, who also designed, reviewed and validated the work.
 
 ## Docs
-[Landscape](docs/landscape.md), [association sets](docs/association-sets.md), [code tour](docs/code-tour.md), [reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [gas report](docs/gas-report.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).
+[Landscape](docs/landscape.md), [spec port](docs/spec-port.md), [testnet run](docs/testnet-run.md), [association sets](docs/association-sets.md), [code tour](docs/code-tour.md), [reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [gas report](docs/gas-report.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).

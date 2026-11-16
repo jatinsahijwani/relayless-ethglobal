@@ -37,6 +37,49 @@ Checked 2026-11-16. The plan in `docs/spec-port.md` follows these, not the brief
 - **The EIP texts disagree on `fees`.** EIP-8250's payload block still shows three per-gas fees, and EIP-8141 has a single total `max_fee`. We follow EIP-8141, as Nethermind does.
 - **The hybrid statement compression is Poseidon in the circuit,** so the hackathon's SHA-256 reason for not compressing was wrong. See "Seven public inputs, not compressed yet" below.
 
+### The spec port: two profiles now, a third later (Part 4)
+The author approved two profiles for Part 4, and a table that takes a third without touching shared code. Built:
+- **`devnet-8421`:** the alt mempool path, unchanged in behaviour. Its validator is semantically identical to the hackathon's, and the SDK's devnet encoding is checked byte for byte against `@forshtat/hegota-support`'s own builder.
+- **`hegota-8141`:** what chain 8141 runs. Our own codec for the 8-field envelope, pinned to ethrex's golden vector. EIP-8272's verifier frame at index 0, every later frame index shifted by one, and roots read with `FRAMEPARAM`/`FRAMEDATALOAD`.
+
+**Why `eips-current` waits:**
+- No public network runs it. Chain 8141 has no code at the new addresses.
+- Only Nethermind master implements it, and standing up that stack was the riskiest step in the plan.
+- `ethrex_simulateFrameTransaction`, which the SDK's preflight depends on, doesn't exist there, so "never broadcast what would fail" needs a new route first.
+- The texts are still moving: three of the four relevant EIP files changed in October.
+
+**Adding it later:** an entry in `packages/sdk/src/profiles.ts` (addresses, codec, RPC), an entry in the validator generator's `PROFILES`, and a local stack script. The pool already takes its recent-root contract as a constructor argument, so the contract doesn't change.
+
+**Nonces:** sequence 0 on both profiles, with the validator's pin. Neither defines EIP-8250's single-use form. `eips-current` will use single-use.
+
+### The pool takes its recent-root contract and an optional registry (Part 4)
+- **`RECENT_ROOT` is an immutable constructor argument,** so one contract serves every profile. The validator built for the same profile checks roots against the same address, and `deploy.ts` passes the validator build's address to the pool.
+- **The staking registry is optional.** Chain 8141 has no alt mempool and no registry, and its public mempool needs no stake. With no registry, the pool stakes nothing and refuses a stake amount.
+
+### A local `hegota-8141` chain is ethrex in dev mode, with a patch (Part 4)
+The author chose a local ethrex `64b8fc09` chain only, with no Nethermind stack. ethrex's dev mode supplies the EIP-7843 slot itself, so it needs no consensus client. But at this commit its block producer still drives Hegotá with Amsterdam's engine calls, and the node refuses them ("engine_forkchoiceUpdatedV4 cannot accept Hegotá payload attributes"). `patches/ethrex-dev-hegota.patch` makes it send `forkchoiceUpdatedV5` and `newPayloadV6` with an empty inclusion list. **It touches only the dev producer and its engine client,** never block validation, the EVM or the mempool, so what we test is chain 8141's execution and admission code. Chain id 81410, so nothing signed locally is valid on 8141. The node runs with chain 8141's 500,000 verify budget.
+
+### The SENDER frame's floors were re-measured before any testnet deployment (Part 4)
+The author required this. On ethrex's own gas schedule, both profiles:
+- **Execution:** 861,786 at full tree depth with a gas-burning recipient and a deferred claim, against the 1,500,000 minimum. Foundry can't measure this, because its EVM doesn't price EIP-8037 state gas, so `scripts/gas-floors.ts` stages the pool's code at depth 20 on the live chain.
+- **State:** at most 3 new slots before the payment (293,760), then a new account (183,600) or a claim (97,920). The highest seen was 566,100, from a recipient that keeps 2 new accounts, against the 1,000,000 minimum.
+- **The case that could have burned a note:** inside a frame, ethrex treats state gas as its own budget and running out as out-of-gas. If a recipient could spend that budget and then revert without it being restored, the claim written after a refused payment would run out after APPROVE. **It is restored:** a recipient that creates 7 slots and refuses leaves the frame at 293,760. `scripts/adversarial.ts` covers this and nine other hostile recipients, 10/10 on each profile.
+
+**The minimums don't change.** The fuzz tests pass 10,000 runs each.
+
+### The refund overhead stays at 150,000 (Part 4)
+Re-derived for `hegota-8141`: intrinsic 21,772 (receipt total minus frames), plus the refund frame's worst case of the 100,000 call cap and about 10,000 of its own. That's about 132,000.
+
+### The solvency check counts pending withdrawals (Part 4)
+A public mempool reserves each pending transaction's maximum cost against its payer's balance. The SDK records what each pending withdrawal can take from the pool and counts it, including withdrawals that `payMany` is about to send together. Before, two withdrawals could each pass the check alone and together exceed the pool.
+
+### Chain 8141 has a faucet and an explorer (Part 4)
+`docs/spec-port.md` said there was no documented way to get chain 8141 ETH. There is: ethrex's `docs/hegota-testnet-spec.md` lists a faucet (faucet.privacy.ethrex.xyz, `POST /api/claim`) and a Dora explorer that decodes frame transactions. I haven't claimed from the faucet; the author is arranging funds.
+
+### Test fixes found on the new chain (Part 4)
+- `txpool_content` keys a sender's transactions by nonce, and every withdrawal uses sequence 0, so three pending withdrawals show as one. The concurrency checks ask for each hash instead, or check that they were mined in the same block.
+- `wait()` could return null for a withdrawal that landed between its two reads, as if a fee bump had replaced it. Fixed in the SDK.
+
 ### Hackathon-only docs removed
 `SUBMISSION.md` and `docs/video-shotlist.md` described the judged entry and would be wrong now. They're in the tag.
 

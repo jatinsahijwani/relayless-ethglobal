@@ -2,6 +2,13 @@
 
 *Written 2026-11-16 on branch `refocus`. Every claim about the EIPs, minimal-shielded-pool, the clients and the networks was checked against the live source that day. The sources are listed at the end.*
 
+## Status after Part 4
+- **Built:** `devnet-8421` and `hegota-8141`, behind the profile table, as the author decided. `eips-current` waits: why, and what adding it takes, is in `DECISIONS.md`.
+- **Measured,** replacing the §4 estimates: the recent-root frame is 5,579 gas, the pool VERIFY frame 233,383, so 238,962 of validation is used, and 308,100 is declared. See `docs/gas-report.md`.
+- **Corrected:** risk 1 below is wrong. Chain 8141 has a faucet and an explorer, listed in ethrex's `docs/hegota-testnet-spec.md`.
+- **Risk 2 resolved differently:** ethrex dev mode, with a small dev-producer patch, replaces the consensus client. See `DECISIONS.md`.
+- **Risk 4 checked:** the SENDER frame's floors hold under EIP-8037 pricing, measured at full depth and against ten hostile recipients.
+
 ## Summary
 - **There isn't one "current spec" to port to. There are three profiles in use:**
 
