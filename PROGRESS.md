@@ -12,6 +12,22 @@
 
 **Noticed in the live SECURITY.md:** `247e2dd2` panics when a top-level frame calls a precompile after an earlier frame emitted logs, which can stop a node producing blocks. No Relayless frame targets a precompile (the validator calls the pairing precompile from inside the pool's VERIFY frame), but the Part D harness on `247e2dd2` has to watch for it.
 
+### Part C: upstream contributions, prepared, not opened
+Nothing was pushed or opened. The branches are in a local clone outside our repo: **`~/Desktop/relayless-upstream/mempool-workshop-sidecar`**, from upstream `master` at `2e22ff0a` (the default branch, unchanged since 2026-10-25).
+
+| Draft | Branch | Checked |
+|---|---|---|
+| [PR 1: replacements aren't a new `seen`](docs/drafts/sidecar-pr1.md) | `fix/replacement-not-seen` (`4184aec`, 4 files) | Builds. New test fails without the fix (4 of 7, `seen` called 9 times instead of 1). Executor suite 393 passed, against 386 on `master` |
+| [PR 2: per-entity budgets, pure-precompile allowlist](docs/drafts/sidecar-pr2.md) | `feat/per-entity-budgets-precompiles` (`2d4018f`, 6 files) | Builds. 10 new tests fail without the change. Executor suite 396 passed. Suggests an issue first, with text |
+| [Issue: eviction by the sender's own consumed key](docs/drafts/sidecar-issue-eviction.md) | none | Grounded in ERC-8421's PROPAGATION-040, with a code sketch |
+
+**End to end:** both branches merged locally (`local/integration-pr1-pr2`, not for upstream) and run as our devnet's sidecar with **no `precompiles` config**: `scripts/e2e.ts local` passed 34/34. The devnet's usual sidecar was put back afterwards.
+
+**Live sources that differed:**
+- **BUDGET-010 now says how to attribute frames.** Per ERC-8421's text at ethereum/ERCs#2028 (head `493ba8ac`), a `pre_verify` frame counts toward its approving frame's entity, and an `expiry_verify` frame toward no entity. Our patch charged `expiry_verify` to the sender. The PR 2 branch follows the ERC.
+- **The sidecar's CONTRIBUTING.md says Yarn and Lerna,** but the repo builds with bun. I used bun.
+- On both `master` and the branches, 5 executor test files fail to load before running (missing generated EntryPoint types and similar). They're pre-existing and untouched.
+
 ### Part B: statement compression
 Done on branch `compression` (stacked on `post-merge-fixes`). The withdrawal statement is compressed to 3 public signals with the hybrid scheme of eprint 2025/1500, adapted from minimal-shielded-pool and credited in `NOTICE.md`. Reasons and choices are in `DECISIONS.md` under Stage 3.
 
