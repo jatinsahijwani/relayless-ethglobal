@@ -1,0 +1,549 @@
+{
+  "target": "ethrex-247e2dd2",
+  "describe": "ethrex 247e2dd2 (MATCHA width budget, on by default) in dev mode, one node, --mempool.max-verify-gas 500000, default MATCHA policy",
+  "network": "local-matcha",
+  "pool": "0x988f891b98f9df4f9447982c2d56b7132c4a360d",
+  "startedAt": "2026-11-17T07:39:53.412Z",
+  "attacks": {
+    "freshPool": {
+      "measured": {
+        "sent": 3,
+        "widthAtStart": 0,
+        "admitted": 1,
+        "refusals": [
+          "Invalid params: sender has 0 MATCHA width, needs 438558 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 0 MATCHA width, needs 438558 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks"
+        ],
+        "matchaChargePerAdditional": 438540,
+        "landed": 1
+      }
+    },
+    "bootstrap": {
+      "measured": [
+        {
+          "sent": true,
+          "gasUsed": 993557,
+          "widthAtLanding": 0,
+          "widthAfterFinality": 1967139
+        },
+        {
+          "sent": true,
+          "gasUsed": 993581,
+          "widthAtLanding": 1967139,
+          "widthAfterFinality": 2960720
+        },
+        {
+          "sent": true,
+          "gasUsed": 1013568,
+          "widthAtLanding": 2960720,
+          "widthAfterFinality": 3974288
+        }
+      ]
+    },
+    "honestBefore": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 2041,
+        "blocks": [
+          893,
+          894
+        ],
+        "matchaCharges": [
+          438558,
+          438576,
+          438540,
+          438516,
+          438576,
+          438504
+        ],
+        "matchaAdmissibleBefore": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "widthBefore": 3974288,
+        "widthAfter": 465956,
+        "refusedThenRetried": [],
+        "sinceSendMs": 2053
+      }
+    },
+    "conflictAcrossNodes": {
+      "measured": {
+        "pairs": 3,
+        "rows": [
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          },
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          },
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          }
+        ],
+        "reputationBefore": {
+          "ethrex 247e2dd2": null
+        },
+        "reputationAfter": {
+          "ethrex 247e2dd2": null
+        },
+        "allSpentOnce": true,
+        "widthBefore": 465956,
+        "widthAfter": 465956
+      },
+      "notes": [
+        "One node only (dev mode, p2p disabled), so the cross-node case reduces to a same-fee conflict on one node."
+      ]
+    },
+    "replacementSpam": {
+      "measured": {
+        "bumps": 10,
+        "burstMs": 40,
+        "accepted": 1,
+        "refusals": [
+          "Invalid params: sender has 27380 MATCHA width, needs 438576 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438576 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438558 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438558 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438558 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438594 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438576 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438594 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks",
+          "Invalid params: sender has 27380 MATCHA width, needs 438594 for an additional frame transaction; width is earned from the gas its transactions used in finalized blocks"
+        ],
+        "reputationBefore": {
+          "ethrex 247e2dd2": null
+        },
+        "reputationAfterBurst": {
+          "ethrex 247e2dd2": null
+        },
+        "reputationAfterLanding": {
+          "ethrex 247e2dd2": null
+        },
+        "noteSpentOnce": false,
+        "baseline": "admitted just before the burst",
+        "widthBefore": 465956,
+        "widthAfterBurst": 27380,
+        "widthAfterLanding": 9684006,
+        "widthAfterFinality": 9684006
+      }
+    },
+    "widthDraining": {
+      "measured": {
+        "belowBaseFee": {
+          "admitted": false,
+          "error": "Invalid params: Frame transaction validation-prefix simulation failed: Invalid Transaction: Insufficient max fee per gas"
+        },
+        "priced": "the cheapest includable price (1-wei tip)",
+        "sent": 10,
+        "admitted": 10,
+        "refusals": [],
+        "attackPendingAfter2Blocks": 0,
+        "widthBefore": 9684006,
+        "widthAfterAdmission": 9684006,
+        "honest": {
+          "matchaAdmissibleBySimulation": true,
+          "matchaRefusal": null,
+          "admitted": true,
+          "landedMs": 1004
+        },
+        "watch": [
+          {
+            "afterBlocks": 5,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 10,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 15,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 20,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 25,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 30,
+            "width": 9684006,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          }
+        ],
+        "reputationBefore": {
+          "ethrex 247e2dd2": null
+        },
+        "reputationAfter": {
+          "ethrex 247e2dd2": null
+        }
+      }
+    },
+    "replacementDraining": {
+      "measured": {
+        "holders": 4,
+        "bumpsEach": 5,
+        "burstMs": 117,
+        "baseline": "admitted",
+        "attackAccepted": 20,
+        "attackSent": 20,
+        "attackRefusals": [],
+        "honest": {
+          "admittedRightAway": true,
+          "retry": null
+        },
+        "widthBefore": 20507996,
+        "widthAfterBurst": 11298098,
+        "reputationBefore": {
+          "ethrex 247e2dd2": null
+        },
+        "reputationAfter": {
+          "ethrex 247e2dd2": null
+        }
+      }
+    },
+    "massInvalidation": {
+      "measured": {
+        "pending": 6,
+        "validAtStart": 6,
+        "parkedOnNonMiningNode": 0,
+        "changes": [
+          {
+            "after": "a deposit (new leaf, new root published, pool balance up)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          },
+          {
+            "after": "another withdrawal landed (new leaf, new root, pool balance down, a nonce key consumed)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          },
+          {
+            "after": "20 more blocks",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          }
+        ]
+      },
+      "notes": [
+        "Validity checked by the target chain's own simulation after each change. The only state a withdrawal's validation depends on is its own nonce key, the recent-root window and the pool's balance covering its maxCost."
+      ]
+    },
+    "honestAfter": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 2056,
+        "blocks": [
+          1284,
+          1285
+        ],
+        "matchaCharges": [
+          438594,
+          438558,
+          438522,
+          438558,
+          438576,
+          438594
+        ],
+        "matchaAdmissibleBefore": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "widthBefore": 10421000,
+        "widthAfter": 11948624,
+        "refusedThenRetried": [],
+        "sinceSendMs": 2065
+      }
+    }
+  },
+  "widthTimeline": [
+    {
+      "label": "after deposits",
+      "block": 663,
+      "at": "2026-11-17T07:40:49.172Z",
+      "width": 0,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 1: landed",
+      "block": 675,
+      "at": "2026-11-17T07:41:02.155Z",
+      "width": 0,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 1: finalized",
+      "block": 741,
+      "at": "2026-11-17T07:42:08.652Z",
+      "width": 1967139,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 2: landed",
+      "block": 744,
+      "at": "2026-11-17T07:42:11.815Z",
+      "width": 1967139,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 2: finalized",
+      "block": 810,
+      "at": "2026-11-17T07:43:18.605Z",
+      "width": 2960720,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 3: landed",
+      "block": 813,
+      "at": "2026-11-17T07:43:21.712Z",
+      "width": 2960720,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "bootstrap 3: finalized",
+      "block": 879,
+      "at": "2026-11-17T07:44:28.982Z",
+      "width": 3974288,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "honest throughput, before attacks: before",
+      "block": 879,
+      "at": "2026-11-17T07:44:28.990Z",
+      "width": 3974288,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "honest throughput, before attacks: after",
+      "block": 894,
+      "at": "2026-11-17T07:44:45.030Z",
+      "width": 465956,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "conflicts: before",
+      "block": 894,
+      "at": "2026-11-17T07:44:45.034Z",
+      "width": 465956,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "conflicts: after",
+      "block": 917,
+      "at": "2026-11-17T07:45:08.740Z",
+      "width": 465956,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement spam: before",
+      "block": 953,
+      "at": "2026-11-17T07:45:46.559Z",
+      "width": 465956,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement spam: after burst",
+      "block": 953,
+      "at": "2026-11-17T07:45:46.600Z",
+      "width": 27380,
+      "pendingFrameTxs": 2,
+      "pendingCharges": 438576,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement spam: after landing",
+      "block": 1050,
+      "at": "2026-11-17T07:47:25.288Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement spam: after finality",
+      "block": 1116,
+      "at": "2026-11-17T07:48:33.334Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: before",
+      "block": 1116,
+      "at": "2026-11-17T07:48:33.341Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: after admission",
+      "block": 1141,
+      "at": "2026-11-17T07:48:59.092Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +5 blocks",
+      "block": 1148,
+      "at": "2026-11-17T07:49:06.547Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +10 blocks",
+      "block": 1153,
+      "at": "2026-11-17T07:49:11.602Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +15 blocks",
+      "block": 1158,
+      "at": "2026-11-17T07:49:16.643Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +20 blocks",
+      "block": 1163,
+      "at": "2026-11-17T07:49:21.691Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +25 blocks",
+      "block": 1168,
+      "at": "2026-11-17T07:49:26.737Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "width draining: +30 blocks",
+      "block": 1173,
+      "at": "2026-11-17T07:49:31.847Z",
+      "width": 9684006,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement draining: before",
+      "block": 1220,
+      "at": "2026-11-17T07:50:21.654Z",
+      "width": 20507996,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "replacement draining: after burst",
+      "block": 1220,
+      "at": "2026-11-17T07:50:21.776Z",
+      "width": 11298098,
+      "pendingFrameTxs": 6,
+      "pendingCharges": 2192772,
+      "widthCap": 30000000
+    },
+    {
+      "label": "honest throughput, after attacks: before",
+      "block": 1271,
+      "at": "2026-11-17T07:51:13.758Z",
+      "width": 10421000,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    },
+    {
+      "label": "honest throughput, after attacks: after",
+      "block": 1285,
+      "at": "2026-11-17T07:51:28.632Z",
+      "width": 11948624,
+      "pendingFrameTxs": 0,
+      "pendingCharges": 0,
+      "widthCap": 30000000
+    }
+  ],
+  "versions": {
+    "chain": "ethrex/v23.0.0-HEAD-247e2dd2c4d4c526dcc64ac1c025bd2319e7a10e/aarch64-apple-darwin/rustc-v1.93.0",
+    "ethrex 247e2dd2": "ethrex/v23.0.0-HEAD-247e2dd2c4d4c526dcc64ac1c025bd2319e7a10e/aarch64-apple-darwin/rustc-v1.93.0"
+  },
+  "reputationStart": {
+    "ethrex 247e2dd2": null
+  },
+  "finalityLagBlocks": 64,
+  "reputationEnd": {
+    "ethrex 247e2dd2": null
+  },
+  "finishedAt": "2026-11-17T07:51:28.635Z"
+}

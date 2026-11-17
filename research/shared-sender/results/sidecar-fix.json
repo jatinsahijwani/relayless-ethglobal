@@ -1,0 +1,326 @@
+{
+  "target": "sidecar-fix",
+  "describe": "The same, WITH the replacement-counting fix (branch local/integration-pr1-pr2 = fix/replacement-not-seen + feat/per-entity-budgets-precompiles)",
+  "network": "local",
+  "pool": "0xeb4bee52306ffb147450974422123f2327186ddc",
+  "startedAt": "2026-11-17T08:00:14.003Z",
+  "attacks": {
+    "honestBefore": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 26525,
+        "blocks": [
+          1219,
+          1221
+        ],
+        "matchaCharges": [],
+        "matchaAdmissibleBefore": [],
+        "refusedThenRetried": [],
+        "sinceSendMs": 26765
+      }
+    },
+    "conflictAcrossNodes": {
+      "measured": {
+        "pairs": 3,
+        "rows": [
+          {
+            "onA": "admitted",
+            "onB": "admitted"
+          },
+          {
+            "onA": "admitted",
+            "onB": "admitted"
+          },
+          {
+            "onA": "admitted",
+            "onB": "admitted"
+          }
+        ],
+        "reputationBefore": {
+          "A (mines)": {
+            "seen": 6,
+            "included": 4,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 0,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "reputationAfter": {
+          "A (mines)": {
+            "seen": 9,
+            "included": 9,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "allSpentOnce": true
+      },
+      "notes": []
+    },
+    "replacementSpam": {
+      "measured": {
+        "bumps": 10,
+        "burstMs": 985,
+        "accepted": 10,
+        "refusals": [],
+        "reputationBefore": {
+          "A (mines)": {
+            "seen": 9,
+            "included": 9,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "reputationAfterBurst": {
+          "A (mines)": {
+            "seen": 10,
+            "included": 9,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "reputationAfterLanding": {
+          "A (mines)": {
+            "seen": 10,
+            "included": 10,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "noteSpentOnce": true,
+        "baseline": null
+      }
+    },
+    "widthDraining": {
+      "measured": {
+        "belowBaseFee": {
+          "admitted": false,
+          "error": "Vm execution error: Invalid Transaction: Insufficient max fee per gas"
+        },
+        "priced": "the cheapest includable price (1-wei tip)",
+        "sent": 10,
+        "admitted": 10,
+        "refusals": [],
+        "attackPendingAfter2Blocks": null,
+        "honest": {
+          "admitted": true,
+          "landedMs": 10274
+        },
+        "watch": [
+          {
+            "afterBlocks": 5,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          },
+          {
+            "afterBlocks": 10,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          },
+          {
+            "afterBlocks": 15,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          },
+          {
+            "afterBlocks": 20,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          },
+          {
+            "afterBlocks": 25,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          },
+          {
+            "afterBlocks": 30,
+            "attackPending": null,
+            "sidecarStatuses": {
+              "OnChain": 10
+            }
+          }
+        ],
+        "reputationBefore": {
+          "A (mines)": {
+            "seen": 10,
+            "included": 10,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "reputationAfter": {
+          "A (mines)": {
+            "seen": 21,
+            "included": 21,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        }
+      }
+    },
+    "replacementDraining": {
+      "measured": {
+        "holders": 4,
+        "bumpsEach": 5,
+        "burstMs": 1086,
+        "baseline": "admitted",
+        "attackAccepted": 20,
+        "attackSent": 20,
+        "attackRefusals": [],
+        "honest": {
+          "admittedRightAway": true,
+          "retry": null
+        },
+        "reputationBefore": {
+          "A (mines)": {
+            "seen": 21,
+            "included": 21,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        },
+        "reputationAfter": {
+          "A (mines)": {
+            "seen": 27,
+            "included": 25,
+            "status": "ok"
+          },
+          "B (never mines)": {
+            "seen": 3,
+            "included": 0,
+            "status": "ok"
+          }
+        }
+      }
+    },
+    "massInvalidation": {
+      "measured": {
+        "pending": 6,
+        "validAtStart": 6,
+        "parkedOnNonMiningNode": 6,
+        "changes": [
+          {
+            "after": "a deposit (new leaf, new root published, pool balance up)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": {
+              "New": 6
+            }
+          },
+          {
+            "after": "another withdrawal landed (new leaf, new root, pool balance down, a nonce key consumed)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": {
+              "New": 6
+            }
+          },
+          {
+            "after": "20 more blocks",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": {
+              "New": 6
+            }
+          }
+        ]
+      },
+      "notes": [
+        "Validity checked by the target chain's own simulation after each change. The only state a withdrawal's validation depends on is its own nonce key, the recent-root window and the pool's balance covering its maxCost."
+      ]
+    },
+    "honestAfter": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 18233,
+        "blocks": [
+          1323,
+          1325
+        ],
+        "matchaCharges": [],
+        "matchaAdmissibleBefore": [],
+        "refusedThenRetried": [],
+        "sinceSendMs": 18369
+      }
+    }
+  },
+  "widthTimeline": [],
+  "versions": {
+    "chain": "ethrex/v23.0.0-eip8141-tracer-9aa3645d795945c64400f41a70aace0edfa7f383/x86_64-unknown-linux-gnu/rustc-v1.93.1",
+    "A (mines)": "skandha/v4.1.1-2e22ff0a2898e69ea4bf5275bce1be8581a8582a",
+    "B (never mines)": "skandha/v4.1.1-2e22ff0a2898e69ea4bf5275bce1be8581a8582a"
+  },
+  "reputationStart": {
+    "A (mines)": {
+      "seen": 0,
+      "included": 0,
+      "status": "ok"
+    },
+    "B (never mines)": {
+      "seen": 0,
+      "included": 0,
+      "status": "ok"
+    }
+  },
+  "finalityLagBlocks": 0,
+  "reputationEnd": {
+    "A (mines)": {
+      "seen": 34,
+      "included": 32,
+      "status": "ok"
+    },
+    "B (never mines)": {
+      "seen": 9,
+      "included": 0,
+      "status": "ok"
+    }
+  },
+  "finishedAt": "2026-11-17T08:16:46.852Z"
+}

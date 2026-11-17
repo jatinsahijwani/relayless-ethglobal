@@ -1,0 +1,20 @@
+{
+  "devnet-8421": {
+    "runtimeBytes": 3773,
+    "unreachableBytes": 385,
+    "reachableStateOrCallOpcodes": {
+      "STATICCALL": 18,
+      "GASPRICE": 1,
+      "CALL": 1
+    }
+  },
+  "hegota-8141": {
+    "runtimeBytes": 3874,
+    "unreachableBytes": 385,
+    "reachableStateOrCallOpcodes": {
+      "STATICCALL": 18,
+      "GASPRICE": 1,
+      "CALL": 1
+    }
+  }
+}
