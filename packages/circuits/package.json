@@ -8,6 +8,13 @@
     "build": "bash scripts/build.sh",
     "test": "node --test --test-timeout=300000 test/*.test.mjs"
   },
-  "dependencies": { "circomlib": "2.0.5" },
-  "devDependencies": { "snarkjs": "0.7.6", "poseidon-lite": "0.3.0", "@zk-kit/lean-imt": "2.2.5" }
+  "dependencies": {
+    "circomlib": "2.0.5"
+  },
+  "devDependencies": {
+    "@zk-kit/lean-imt": "2.2.5",
+    "poseidon-lite": "0.3.0",
+    "snarkjs": "0.7.6",
+    "viem": "^2.57.7"
+  }
 }
