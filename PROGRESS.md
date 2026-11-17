@@ -12,6 +12,42 @@
 
 **Noticed in the live SECURITY.md:** `247e2dd2` panics when a top-level frame calls a precompile after an earlier frame emitted logs, which can stop a node producing blocks. No Relayless frame targets a precompile (the validator calls the pairing precompile from inside the pool's VERIFY frame), but the Part D harness on `247e2dd2` has to watch for it.
 
+### Part B: statement compression
+Done on branch `compression` (stacked on `post-merge-fixes`). The withdrawal statement is compressed to 3 public signals with the hybrid scheme of eprint 2025/1500, adapted from minimal-shielded-pool and credited in `NOTICE.md`. Reasons and choices are in `DECISIONS.md` under Stage 3.
+
+**Results, 2026-11-17:**
+
+| | `devnet-8421` | `hegota-8141` |
+|---|---|---|
+| Pool VERIFY frame used | **227,598** (was about 253,100) | **207,913** (was 233,383): −25,470 |
+| Validation declared | **260,100** (was 300,000) | **268,100** (was 308,100): under Nethermind's 300,000 |
+| Validation used | 227,598 | 213,492 |
+| Withdrawal total, fresh recipient | 924,937 (local) | **916,820 on chain 8141** (was 941,778) |
+| Circuit | 26,052 constraints (was 24,965). Proving 2.0–2.1 s in Node | |
+
+**Test results, both profiles, on fresh deployments of the compressed build:**
+
+| Suite | `devnet-8421` | `hegota-8141` |
+|---|---|---|
+| Circuits | 16/16 (shared; 3 new: compressed signals, binding, aliasing, plus a vector shared with the SDK) | |
+| Contracts (Foundry, fuzz at 10,000 runs) | 29/29 (shared) | |
+| SDK | 43/43 (shared; 4 new compression tests) | |
+| ASP server | 15/15 (shared) | |
+| `scripts/e2e.ts` | **34/34** | **32/32** |
+| `scripts/e2e-asp.ts` | **10/10** | **10/10** |
+| `scripts/adversarial.ts` | **10/10** | **10/10**. State ceiling 566,100 of 1,000,000 |
+| `scripts/gas-floors.ts` | 861,779 of 1,500,000 | 861,786 of 1,500,000 |
+| `scripts/alias.ts` (new) | **6/6** | **6/6**. Aliased amount, change, k and nullifier hash: each proof verifies off-chain, and the node refuses each transaction |
+| `scripts/testnet-run.ts` (five steps) | | **5/5 locally, then 5/5 on chain 8141** |
+| `pnpm typecheck`, `pnpm build` | clean | |
+
+**Chain 8141, new pool:** `0xab5d3d27d192af9bcb1eafc953ba695baea0c7be`, validator `0x7c8566920a28bbb8c149916eb67624c3b723e316`. Links in the README's [Public testnet](README.md#public-testnet) section; the first pool stays there as history. Spent 0.1179 ETH of testnet ETH (0.8820 to 0.7641), of which 0.0729 stays in the new pool. Total spent in Stage 3: 0.1179 ETH, under the 0.2 ETH limit.
+
+**Things I noticed:**
+- Docker had quit, taking the devnet down. After a restart its two beacons found no peers and stopped producing, so the devnet was restarted from a new genesis. Its old data was moved aside to `data.old.<time>` in the sidecar's `deploy/devnet`, not deleted. `scripts/local-stack.sh` now handles a stale registry. Starting Docker brought back one unrelated container (`my-app-indexer`), which I stopped again.
+- My first version of `alias.ts` judged the devnet's simulation by a field only `64b8fc09` returns, so its devnet "refusals" were meaningless. It now uses the SDK's own preflight rule, and the devnet refuses each aliased transaction at the pool's VERIFY frame.
+- `scripts/alias.ts` wasn't run against chain 8141. It sends nothing, but it needs a deposit and a funded throwaway key, and the local runs on the same client revision cover it.
+
 ## Stage 2: refocus (branch `refocus`, started 2026-11-16)
 The positioning is `docs/landscape.md`. The hackathon version stays reachable at the tag `v1.0-ethglobal-mumbai`, and everything below the Stage 2 sections describes it.
 
