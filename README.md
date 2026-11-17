@@ -251,7 +251,7 @@ All of this repository's code is in its git history, from the first commit, `aa7
 Third-party work is listed under [Prior work](#prior-work) and [NOTICE.md](NOTICE.md).
 
 ## AI usage
-Claude Code was used for implementation, testing and documentation, under the author's direction. The ideas, steps and detailed specifications came from the author, who also designed, reviewed and validated the work.
+Claude Code was used for implementation, testing and documentation, under the author's direction, and from Stage 3 also for the shared-sender research harness and its write-up, and for drafting the upstream PRs, forum replies and grant texts in `docs/drafts/`, which the author reviews and sends. The ideas, steps and detailed specifications came from the author, who also designed, reviewed and validated the work.
 
 ## Docs
 [Landscape](docs/landscape.md), [spec port](docs/spec-port.md), [testnet run](docs/testnet-run.md), [association sets](docs/association-sets.md), [code tour](docs/code-tour.md), [reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [gas report](docs/gas-report.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).
