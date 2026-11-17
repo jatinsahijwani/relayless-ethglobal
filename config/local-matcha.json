@@ -1,0 +1,7 @@
+{
+  "name": "local-matcha",
+  "profile": "hegota-8141",
+  "chainId": 81411,
+  "rpc": "http://127.0.0.1:18745",
+  "reserveEth": "1"
+}
