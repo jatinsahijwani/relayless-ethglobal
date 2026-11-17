@@ -89,12 +89,13 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 | Yul validator with `verbatim` | Yes | Same |
 | Settlement can't fail after approval | Yes, fuzz-tested | Same, with pinned limits |
 | Every public input range-checked | Yes | Same |
+| Statement compressed to 3 public inputs (eprint 2025/1500) | Yes, the withdrawal, since 2026-11-17 | Same, which Relayless adapted |
 
 **None of the core pool design is novel.** Present it as built on prior work.
 
 ## Where they are ahead
 
-- **Compressed statement:** 3 public inputs, against our 7 (our pool VERIFY frame uses 253k on `devnet-8421` and 233,383 on `hegota-8141`, against a floor of about 211k).
+- **Compressed statement:** they compressed first (11 values to 3 public inputs, saving about 44k). Relayless adopted the same scheme on 2026-11-17 (7 values to 3, saving 25,470 on `hegota-8141`, where the pool's VERIFY frame now uses 207,913). The ragequit isn't compressed yet.
 - **Private transfers:** join-split. Relayless only withdraws and pays.
 - **Wallet security:** owner sets and hardware-wallet signing, post-quantum note delivery, disclosure receipts.
 - **Assurance:** a formal-methods effort and a reproducible-artifact discipline.
@@ -128,7 +129,7 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 
 - **Spec version:** ported on 2026-11-16 to two profiles: `devnet-8421` (the sidecar devnet) and `hegota-8141` (chain 8141: recent-root VERIFY frame, nonce manager at `0x8250968C…`, 97,920 state gas per new key). Not yet on `owner-set-v1` or the EIPs at current master (`eips-current`).
 - **Public testnet history:** one run on chain 8141 (2026-11-16), against the reference pool's deployments since September 2026.
-- **Uncompressed public inputs.**
+- **The ragequit's public inputs** aren't compressed yet (the withdrawal's are, since 2026-11-17).
 - **No transfers.**
 - **Devnet-grade trusted setup** and no audit.
 
@@ -146,7 +147,7 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 
 ## Implications for the roadmap
 
-- **Collaborate rather than compete.** Align with the `owner-set-v1` profile where sensible, consider adopting the statement compression, and offer the SDK and association-set layer as something that composes with it.
+- **Collaborate rather than compete.** Align with the `owner-set-v1` profile where sensible, adopt the statement compression (done for the withdrawal on 2026-11-17), and offer the SDK and association-set layer as something that composes with it.
 - **Reframe the MATCHA work.** MATCHA already exists in ethrex, so our value is testing it against Relayless's shared-sender attacks, comparing it with ERC-8421 reputation, and publishing the results.
 - **Support EIP-8250 and EIP-8272 for Hegotá** with Relayless as a working user.
 

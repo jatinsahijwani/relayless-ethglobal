@@ -1,6 +1,6 @@
 # Public testnet run (chain 8141)
 
-The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: done on 2026-11-16, 5/5.** Results and explorer links are in the README's [Public testnet](../README.md#public-testnet) section.
+The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: done twice, 5/5 each time:** on 2026-11-16 with the first pool, and on 2026-11-17 with a new pool for the compressed withdrawal statement. Results and explorer links are in the README's [Public testnet](../README.md#public-testnet) section.
 
 ## The network
 | | |
@@ -33,13 +33,21 @@ npx tsx scripts/deploy.ts hegota-8141                     # writes config/hegota
 npx tsx scripts/testnet-run.ts hegota-8141                # the five steps below, recorded with explorer links
 ```
 
-`testnet-run.ts` asserts each step, writes `.relayless-testnet-hegota-8141.json`, and prints the rows for the README's [Public testnet](../README.md#public-testnet) table:
+`testnet-run.ts` asserts each step, writes `.relayless-testnet-hegota-8141.json` (git-ignored; each run's copy is kept in [testnet-runs/](testnet-runs/) with its deployed config), and prints the rows for the README's [Public testnet](../README.md#public-testnet) table:
 
 1. **Deposit:** five notes of 0.02 ETH.
 2. **Private withdrawal** of 0.015 ETH to a derived address with no balance and no history, checked at 0 ETH before. Every frame must succeed.
 3. **Double spend:** the spent note, forced past the SDK's own check. It must be refused by the node's simulation, on the nonce, **before anything is broadcast**. No transaction exists for this step.
 4. **Concurrent withdrawals:** three notes paid together with `payMany`, each on its own nullifier key, checked as pending at the same time or mined in the same block. On this chain that shows the relaxed per-sender rule, not MATCHA.
 5. **Public exit:** a ragequit to the depositor.
+
+## What the runs cost
+| Run | Spent from the deployer | Left in the pool |
+|---|---|---|
+| 2026-11-16, first pool | 0.1180 ETH (1.0 from the faucet to 0.8820) | its change notes |
+| 2026-11-17, compressed | 0.1179 ETH (0.8820 to 0.7641) | 0.0729 ETH |
+
+Before deploying a new pool, rerun the safety checks on the local `hegota-8141` chain: `scripts/gas-floors.ts`, `scripts/adversarial.ts`, `scripts/alias.ts`, and the five steps with `npx tsx scripts/testnet-run.ts local-hegota`.
 
 ## Already checked without funds
 - `testnet-preflight.ts` passes against the live chain: chain id 8141, ethrex `64b8fc09`, the recent-root contract's code hash `0xcd1c…75a5`, the nonce manager installed, and slots in the headers.

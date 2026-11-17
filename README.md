@@ -14,7 +14,7 @@
 |---|---|---|
 | Core: frame withdrawals, recovery, meter, k-gate | Works end to end on both spec profiles: 34 e2e checks on `devnet-8421`, 32 on `hegota-8141` | `devnet-8421`: ethrex `9aa3645d` plus a patched ERC-8421 sidecar (the alt mempool path). `hegota-8141`: a local chain on ethrex `64b8fc09`, the revision the public Hegotá testnet runs. See [Spec profiles](#spec-profiles) |
 | Association sets and public exit | Works with any provider through one SDK interface, with an allowlist ASP as the reference | Both profiles, locally. See [Association sets](#association-sets) |
-| Public testnet (chain 8141) | Deployed. Deposit, private withdrawal to a 0-ETH address, double spend refused, 3 concurrent withdrawals and a public exit all passed | See [Public testnet](#public-testnet) |
+| Public testnet (chain 8141) | Deployed twice, 5/5 each time: deposit, private withdrawal to a 0-ETH address, double spend refused, 3 concurrent withdrawals, public exit. The current pool uses the compressed statement, declaring 268,100 gas of validation | See [Public testnet](#public-testnet) |
 
 Testnets and local chains only. Not audited.
 
@@ -154,7 +154,27 @@ A pool can require that a note's label is in an approved set before it leaves pr
 The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sepolia, private receive names, and an optional Nym route. They're in the tag `v1.0-ethglobal-mumbai`, and the Sepolia contracts stay deployed with their subregistry roles revoked.
 
 ## Public testnet
-**Deployed and exercised on 2026-11-16** on the Hegotá privacy testnet, chain 8141, run by the ethrex team: RPC `https://rpc1.privacy.ethrex.xyz`, explorer [dora.privacy.ethrex.xyz](https://dora.privacy.ethrex.xyz). The node runs ethrex `64b8fc09`, so the pool uses the `hegota-8141` profile. Withdrawals went to the chain's own public mempool: no alt mempool, no stake, no relayer.
+Relayless runs on the Hegotá privacy testnet, chain 8141, run by the ethrex team: RPC `https://rpc1.privacy.ethrex.xyz`, explorer [dora.privacy.ethrex.xyz](https://dora.privacy.ethrex.xyz). The node runs ethrex `64b8fc09`, so the pool uses the `hegota-8141` profile. Withdrawals go to the chain's own public mempool: no alt mempool, no stake, no relayer.
+
+### Current pool: compressed statement (2026-11-17, 5/5)
+The withdrawal proof exposes 3 public signals instead of 7 (eprint 2025/1500). Each withdrawal declares **268,100 gas of validation**, under Nethermind's 300,000 default, and verification uses 213,492.
+
+| Contract | Address |
+|---|---|
+| RelaylessPool | [`0xab5d3d27…`](https://dora.privacy.ethrex.xyz/address/0xab5d3d27d192af9bcb1eafc953ba695baea0c7be) |
+| Validator (`hegota-8141`, compressed) | [`0x7c856692…`](https://dora.privacy.ethrex.xyz/address/0x7c8566920a28bbb8c149916eb67624c3b723e316) |
+| PoseidonT3 / T4 | [`0xcc177be1…`](https://dora.privacy.ethrex.xyz/address/0xcc177be185c2c5ce091d303a65ad29dd3d109667) / [`0x608aa24c…`](https://dora.privacy.ethrex.xyz/address/0x608aa24c4278fb2eefe0a0b750212760930c60ae) |
+
+| Step | Result | Transaction |
+|---|---|---|
+| Deposit | 5 notes of 0.02 ETH (first shown) | [`0x0ccf6522…`](https://dora.privacy.ethrex.xyz/tx/0x0ccf6522cddf0b42f7caddea7440eb339016ec246eaa23ae2c1b93320a615f0b) |
+| Private withdrawal to a fresh address holding 0 ETH | `0x886e…4Cd6` went from 0 to 0.014999 ETH. 4 frames, all succeeded. **916,820 gas** (was 941,778): root frame 5,579, pool VERIFY **207,913** + 97,920 state (was 233,383), SENDER 193,729 + 379,440 state, refund 9,967 | [`0x543a9ad3…`](https://dora.privacy.ethrex.xyz/tx/0x543a9ad335af2202d696d9bdae7c242c30f952f44f06b9eb512dbdfc24236ed8) |
+| Double spend of the same note | Refused by the node's simulation before broadcast: "Nonce mismatch: expected 1, got 0". Nothing was sent | none |
+| Concurrent withdrawals from the one pool sender | 3 of 3 pending at once, all mined in block 859307. This chain relaxes one-pending-per-sender for disjoint nonce keys; it has no MATCHA width budget, so this isn't a MATCHA result | [`0x7dabc6e6…`](https://dora.privacy.ethrex.xyz/tx/0x7dabc6e6d7d93be1e2a589f1458b0cce291cc8589b9eef7d19daadc134181e1b), [`0x1d02aa24…`](https://dora.privacy.ethrex.xyz/tx/0x1d02aa2465ea150ef9dded3c163d8515efb359d10a779ae604b0aaa39d9e62d4), [`0x8e87a405…`](https://dora.privacy.ethrex.xyz/tx/0x8e87a40519350a210841ea1c2c6c56f2914b92da6411c2807819f5d121ad5f7f) |
+| Public exit (ragequit) to the depositor | Paid the depositor, nullifier spent | [`0x7d6d3ffb…`](https://dora.privacy.ethrex.xyz/tx/0x7d6d3ffb622f6787e51bcf6c5ea5d7b506db0597caf29e99a365aa0d98e15897) |
+
+### First pool: seven public inputs (2026-11-16, 5/5), kept as history
+The first deployment, before compression. Its change notes stay in it, and spending them needs the old proving key, which is in git at `9e9536c`.
 
 | Contract | Address |
 |---|---|
@@ -170,7 +190,7 @@ The hackathon version also had a World ID ASP, an ENSv2 directory of ASPs on Sep
 | Concurrent withdrawals from the one pool sender | 3 of 3 pending at once, mined in blocks 851714, 851715, 851715. This chain relaxes one-pending-per-sender for disjoint nonce keys; it has no MATCHA width budget, so this isn't a MATCHA result | [`0x9a4f521d…`](https://dora.privacy.ethrex.xyz/tx/0x9a4f521d474c685cee9d02eaf254948e6a921806c398e4a1e9692093f3489ce1), [`0x0511e178…`](https://dora.privacy.ethrex.xyz/tx/0x0511e1786a9484325b565937815f5868d6e62731803dfb712eac839eb7f5a59a), [`0x9679fdd5…`](https://dora.privacy.ethrex.xyz/tx/0x9679fdd5303c63c614ce1d3dcb277a2ab453b1134f11c6b39a2de526097c6508) |
 | Public exit (ragequit) to the depositor | Paid the depositor, nullifier spent | [`0x12b5c7f7…`](https://dora.privacy.ethrex.xyz/tx/0x12b5c7f75cf85729adc4532f861497fb2ba9c1ad375bb80d4057ef6798b004e9) |
 
-The deployer was a throwaway key funded from the testnet faucet. How to rerun: [docs/testnet-run.md](docs/testnet-run.md). Raw results: `.relayless-testnet-hegota-8141.json`.
+The deployer was a throwaway key funded from the testnet faucet. How to rerun: [docs/testnet-run.md](docs/testnet-run.md). Raw results of both runs: [docs/testnet-runs/](docs/testnet-runs/).
 
 ## CROPS
 - **C:** We run no server, relayer or RPC. You depend on a mempool node and an RPC, which anyone can run. If a node refuses you, use another. The pool has no owner and can't be upgraded or paused. The exception is the association set, if a pool uses one: its operator decides who can withdraw privately, and public exit stays open regardless.
@@ -195,7 +215,7 @@ The deployer was a throwaway key funded from the testnet faucet. How to rerun: [
 ## Limitations
 - **The alt mempool path runs on a patched local sidecar.** The public gateway needs per-entity budgets and precompiles allowed. The same transaction simulates successfully against the public chain, and its gateway refuses it. The `hegota-8141` profile doesn't need the alt mempool, because chain 8141's public mempool admits 500,000 verify gas.
 - **Testnets only.** These EIPs aren't on mainnet. Neither profile follows today's EIP texts exactly: see [Spec profiles](#spec-profiles).
-- **The validation budget is above EIP-8141's 100,000** on every profile: about 308,000 declared and 239,000 used on `hegota-8141`. It needs a node that admits more, as chain 8141 does. Compressing the public inputs, planned next, saves about 25,000.
+- **The validation budget is above EIP-8141's 100,000** on every profile: 268,100 declared and 213,492 used on `hegota-8141`, 260,100 declared and 227,598 used on `devnet-8421`. It needs a node that admits more, as chain 8141 (500,000) and Nethermind's default (300,000) do.
 - **Not audited.** Groth16 isn't post-quantum. Trusted setup is devnet-grade.
 - **On the alt mempool path, withdrawals need the pool to be staked** under the ERC draft's budgets, and the stake can't be withdrawn.
 - **A banned pool blocks everyone at that node**, including public exits, until `seen` decays or you use another node.
@@ -207,7 +227,7 @@ The deployer was a throwaway key funded from the testnet faucet. How to rerun: [
 **Fee-bump limit, off by default.** Build the validator with `RELAYLESS_FEE_RANGE=<min wei>:<max wei>` to reject max fees outside a fixed range, which caps fee bumps per note. It limits griefing on a node that still counts replacements, but withdrawals stall when the base fee passes the ceiling. See the [analysis](docs/reputation-analysis.md#the-optional-fee-bump-limit).
 
 ## Gas
-A withdrawal to a fresh wallet costs about 900,000–950,000 gas on `devnet-8421`, of which about **253,000** is verification. On `hegota-8141` it's about 980,000–1,030,000, of which **238,962** is verification: 5,579 for the recent-root frame and 233,383 for the pool's. The rest of the difference is the nullifier slot's state gas. Proving takes about 2 s on a laptop. Full figures: [docs/gas-report.md](docs/gas-report.md).
+A withdrawal to a fresh wallet costs about 875,000–925,000 gas on `devnet-8421`, of which **227,598** is verification. On `hegota-8141` it's about 915,000–1,005,000 (916,820 on the public chain), of which **213,492** is verification: 5,579 for the recent-root frame and 207,913 for the pool's. The rest of the difference is the nullifier slot's state gas. Compressing the withdrawal statement to 3 public signals saved about 25,500 gas of verification on each profile. Proving takes about 2 s on a laptop. Full figures: [docs/gas-report.md](docs/gas-report.md).
 
 ## Prior work
 - [EIP-8141 and minimum required validation budget for privacy applications](https://ethresear.ch/t/eip-8141-and-minimum-required-validation-budget-for-privacy-applications/25889) (mmjahanara): the gas floor and optimizations.

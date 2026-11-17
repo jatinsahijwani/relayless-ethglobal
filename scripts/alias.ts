@@ -33,6 +33,16 @@ const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  (${detail})` : ""}`);
 };
 const simulate = (tx: any) => rpc<any>(cfg.rpc, "ethrex_simulateFrameTransaction", profile.simulateParams(rawOf(profile, tx)));
+// The SDK's own preflight rule. On a public-mempool profile, `valid` is the node's admission verdict. On devnet-8421 the
+// canonical rules refuse every withdrawal on MAX_VERIFY_GAS, so there it is: no execution error, and every frame up to
+// and including SENDER succeeded.
+function verdict(sim: any): { admitted: boolean; why: string } {
+  if (sim.executionError) return { admitted: false, why: String(sim.executionError) };
+  if (profile.submit === "public-mempool" && sim.valid !== true) return { admitted: false, why: String(sim.violation ?? "not valid") };
+  const failed = (sim.frames ?? []).slice(0, S + 1).findIndex((f: any) => !f.succeeded);
+  if (!sim.frames?.length) return { admitted: false, why: "no frames in the simulation" };
+  return failed >= 0 ? { admitted: false, why: `frame ${failed} failed` } : { admitted: true, why: "" };
+}
 
 console.log(`\n== aliased statement values, ${network} (${profile.id}): pool ${cfg.pool}\n`);
 const d = await rl.deposit({ amount: parseEther("0.05") });
@@ -45,8 +55,8 @@ const to = rl.freshAddress(7_000 + Math.floor(Math.random() * 1_000));
 const { tx: honest } = await rl.prepare(note, { to, amount: parseEther("0.02") }, 0n, state, caps);
 const honestInput = { ...lastInput };
 
-const control = await simulate(honest);
-check("control: the honest withdrawal is admitted", control.valid === true && !control.violation, control.violation ?? "");
+const control = verdict(await simulate(honest));
+check("control: the honest withdrawal is admitted", control.admitted, control.why);
 
 // The SENDER frame's withdraw(recipient, amount, fee, change, nullifierHash, k), re-encoded with one value aliased.
 const [recipient, amount, change, nh, k] = [to, BigInt(honestInput.withdrawnValue), BigInt(honestInput.changeCommitment), BigInt(honestInput.nullifierHash), BigInt(honestInput.k)];
@@ -70,8 +80,8 @@ for (const c of cases) {
   const { proof, publicSignals } = await files.prove("withdraw", input);
   const verifies = await snarkjs.groth16.verify(vk, publicSignals, proof);
   tx.signatures[0].signature = encodeWithdrawProof(proof, BigInt(publicSignals[0])) as Hex;
-  const sim = await simulate(tx);
-  check(`${c.name}: the aliased proof verifies off-chain, and the node refuses the transaction`, verifies === true && sim.valid !== true, `proof verifies: ${verifies}; node: valid=${sim.valid}${sim.violation ? `, ${String(sim.violation).slice(0, 80)}` : ""}`);
+  const v = verdict(await simulate(tx));
+  check(`${c.name}: the aliased proof verifies off-chain, and the node refuses the transaction`, verifies === true && !v.admitted, `proof verifies: ${verifies}; node: ${v.admitted ? "admitted" : `refused, ${v.why.slice(0, 80)}`}`);
 }
 check("nothing was broadcast or spent", !(await rl.isSpent(note.nullifierHash)));
 

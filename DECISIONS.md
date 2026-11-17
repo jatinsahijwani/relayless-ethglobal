@@ -2,6 +2,32 @@
 
 Design choices and why. Newest context first where it matters.
 
+## Stage 3 (2026-11-17): compression, upstream drafts, shared-sender research
+
+### The withdrawal statement is compressed; the ragequit's isn't
+The withdrawal proof now exposes `[beta, gamma, alpha]` instead of seven values (eprint 2025/1500, adapted from minimal-shielded-pool; see NOTICE.md). Measured on chain 8141: pool VERIFY 207,913 gas, from 233,383. **The ragequit keeps its five inputs:** its VERIFY frame uses 219,827 on `hegota-8141`, which already fits the new declared limit, and leaving it alone keeps its key, and so every existing ragequit, unchanged. Compressing it would save about 13k more and can follow.
+
+**Choices made in adapting it:**
+- **alpha's preimage** is the seven values as 32-byte words in the circuit's order: root commitment, nullifier hash, change commitment, amount, sigHash mod r, k, ASP root. The validator reduces sigHash itself, so that word is canonical by construction.
+- **beta travels after the proof in the frame transaction's signature** (now 288 bytes for a withdrawal), not in frame data as minimal-shielded-pool does. Our proof already lives in the ARBITRARY signature, which sigHash elides, so beta adds no circularity. A wrong beta only fails verification.
+- **Every statement value is range-checked by the validator.** They already were, but compression makes it load-bearing: the verifier no longer sees the values, and an aliased value (x + r) gives a different alpha for the same field element, so a proof for it verifies. `scripts/alias.ts` shows both halves on a real chain for amount, change, k and the nullifier hash: the aliased proof verifies off-chain against the pool's key, and the node refuses the transaction.
+- **The SDK checks the prover's public signals against its own compression** before building the transaction, because a disagreement in order or encoding would otherwise show up only as a refusal.
+
+### The pool's VERIFY frame declares 260,000
+Down from 300,000. The worst VERIFY used is the `devnet-8421` ragequit (it pays the nullifier key's 20,000 first use in that frame). `hegota-8141` declares 268,100 in all: 8,000 for the root frame, 260,000, and 100 for the signature (272,100 with an association set's second root). That's under Nethermind's 300,000 default. **It's above the 250,000 that Nethermind's post measured as holding one attacker peer**; a `hegota-8141`-only limit of 235,000 would get under it (243,100 declared) with about 15,000 to spare on a ragequit. Not done, because it's a per-profile limit for a margin that isn't a node default; it needs the author's call. The VERIFY limit is set by the SDK, not pinned by the validator: a frame that ran out would only make the transaction invalid, never burn a note.
+
+### Correction: the 250k figure was not Nethermind's limit
+The Stage 2 entry below said compression would bring the budget "under the 250k Nethermind measured as its limit". Nethermind's default `--mempool.max-verify-gas` is 300,000. 250k is the budget their post found holds one attacker peer at a 25 ms block-building slowdown.
+
+### A new pool on chain 8141; the old one stays
+Compression changes the withdrawal key, so the validator and the pool are new: `0xab5d3d27…` (2026-11-17), with the five steps re-run. The first pool, `0x6d58de3f…` (2026-11-16), still holds its change notes. It can only be spent with the old key, which is in git at `9e9536c` (`packages/circuits/build/`). Its records are in `docs/testnet-runs/`.
+
+### Only the withdrawal key was regenerated
+`scripts/build.sh` now takes circuit names. Regenerating the ragequit key too would have changed the validator for no reason.
+
+### The local devnet was restarted from a new genesis
+Docker had quit, and after a restart the two beacons found no peers and stopped producing. `scripts/local-stack.sh` now notices when its cached staking registry isn't on the chain, redeploys it and refunds the sidecar's faucet. The old chain data was moved aside, not deleted.
+
 ## Stage 2 (2026-11-16): the core is the pool, the alt mempool path and a provider-agnostic association set
 The positioning is `docs/landscape.md`: the pool primitive isn't novel, so the core keeps what is ours (the ERC-8421 path, shared-sender reputation, compliance, the SDK) and drops what's not research. Everything removed is in the tag `v1.0-ethglobal-mumbai`.
 
@@ -134,7 +160,7 @@ Vanilla solc can't emit frame opcodes; Yul can via `verbatim`. Hardcoding the ke
 ## The snarkjs verifier template isn't used
 `staticcall(sub(gas(), 2000), …)` is rejected (`payer uses banned opcode: GAS`), measured in the Phase 0 spike.
 
-## Seven public inputs, not compressed yet
+## Seven public inputs, not compressed yet (superseded on 2026-11-17: see Stage 3)
 Root commitment, nullifier hash, change commitment, amount, sigHash, k, ASP root. Each input past the first costs about 6,645 gas of verification. The devnet's VERIFY frame measures 253,176 gas.
 
 **The hackathon reason was wrong.** It said compression needs SHA-256 in the circuit, about 60k constraints and 2.7x the proving time. The hybrid scheme (eprint 2025/1500), which minimal-shielded-pool uses, does without: the validator computes `alpha = keccak(statement) mod r`, the circuit computes `beta = Poseidon(statement)`, and both evaluate the statement polynomial at `alpha + beta`. That's a few hundred constraints on top of 24,965.

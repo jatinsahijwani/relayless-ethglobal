@@ -5,11 +5,11 @@ A withdrawal, file by file, then likely questions. Line numbers are for the tag 
 ## The withdrawal path
 | Step | Where | Point at |
 |---|---|---|
-| 1. `pay()` plans the payment | `packages/sdk/src/client.ts:345` | Picks one note, or splits across several. `planPayment` at `:139` |
+| 1. `pay()` plans the payment | `packages/sdk/src/client.ts:356` | Picks one note, or splits across several. `planPayment` at `:138` |
 | 2. Pick the root and fees | `client.ts`, `latestRootRef` and `feeCaps` | Always the newest root. Max fee is 10× base fee, refunded when unused |
-| 3. Build the witness and prove | `client.ts:522` (`prepare`), `:561` | `sigHash` at `:544` goes in as a public input, so the proof fixes the whole transaction |
-| 4. Build the frames | `packages/sdk/src/frame.ts:56` | Three frames, `nonceKeys: [nullifierHash]` at `:72`, root reference at `:77`, proof in an `ARBITRARY` signature |
-| 5. Simulate | `client.ts:567` (`preflight`) | A transaction that would fail is never broadcast, because that costs the pool reputation |
+| 3. Build the witness and prove | `client.ts:516` (`prepare`) | `sigHash` at `:538` is part of the statement, so the proof fixes the whole transaction. The statement is compressed to `[beta, gamma, alpha]` at `:542` (`packages/sdk/src/compression.ts`) |
+| 4. Build the frames | `packages/sdk/src/frame.ts:109` | Three frames (four on `hegota-8141`, with the recent-root frame first), `nonceKeys: [nullifierHash]` at `:98`, root references at `:105`, the proof and beta in one 288-byte `ARBITRARY` signature |
+| 5. Simulate | `client.ts:568` (`preflight`) | A transaction that would fail is never broadcast, because that costs the pool reputation |
 | 6. Submit once | `client.ts:586` (`submit`), `:589` | `eth_sendFrameTransaction`. Never retried. Only `bumpFee` (`:480`) can resend a nullifier |
 | 7. Sidecar admission | `patches/sidecar-budget-010.patch:238` (`findEntityOverBudget`) | Per-entity budget after stake lookup: 100k or 1M |
 | 8. VERIFY, shape | `packages/contracts/script/gen-validator.mjs:92` (`validate`) | Sender and frame checks. One nonce key at `:108`. Frame 1 pinned from `:121` |
@@ -51,11 +51,11 @@ Per-entity budgets (BUDGET-010) and the replacement fix (REPUTATION-040). Allowi
 **9. Why is allowing precompiles safe for builders?**
 They're pure, stateless, deterministic and gas-bounded. They read no state another pending transaction could change, so a block landing can't flip their result. There's no mass-invalidation risk and nothing extra to revalidate. The one limit is cost: gas doesn't price CPU evenly, so a node should set its budget with that in mind.
 
-**10. Why 253k when the research floor is about 211k?**
-The floor of 211,828 assumes one public input. We have seven (root commitment, nullifier hash, change commitment, amount, sigHash, k, ASP root), and each extra one costs about 6,645 gas. A delegatecall to the validator costs 2,600, and shape checks add a little. It includes the 20k first-use nonce key.
+**10. How does the VERIFY frame compare with the research floor of about 211k?**
+The floor of 211,828 assumes one public input and includes the nonce key's 20k first use. Our withdrawal proof has three public signals (beta, gamma, alpha) standing for a seven-value statement. On `hegota-8141` the pool's VERIFY frame uses 207,913, below the floor, because the nonce key's first use is state gas there. On `devnet-8421`, which charges it in execution, it's 227,598. A delegatecall to the validator costs 2,600, and shape and range checks add a little.
 
-**11. Why not compress the public inputs?**
-It's planned, after the spec port. Compressing 7 inputs to 3 saves about 25k gas net. The hybrid scheme (eprint 2025/1500) uses Poseidon in the circuit, so the cost is a few hundred constraints. The hackathon answer here said SHA-256 and 2.7x the proving time, which was wrong. See `DECISIONS.md`.
+**11. How are the public inputs compressed, and why is that safe?**
+With the hybrid scheme of eprint 2025/1500, as minimal-shielded-pool uses it. The validator computes `alpha = keccak256(statement) mod r` from what the transaction carries, the circuit outputs `beta = Poseidon(statement)` and `gamma`, the statement as a polynomial at `alpha + beta`, and the verifier checks `[beta, gamma, alpha]`. It saved 25,470 gas of verification on `hegota-8141`, for 1,087 more constraints. The verifier no longer sees the values, so the validator range-checks every one: an aliased value (x + r) would give a new alpha with a proof that verifies. `scripts/alias.ts` shows the node refusing exactly those proofs. The hackathon answer here said compression needs SHA-256 in the circuit, which was wrong. See `DECISIONS.md`.
 
 **12. How serious is the trusted setup?**
 Devnet-grade. Phase 1 is the PSE Perpetual Powers of Tau, but phase 2 is a single local contribution, so anyone with that randomness could forge proofs. That's not acceptable beyond a devnet. The circuits and validator aren't audited either.
