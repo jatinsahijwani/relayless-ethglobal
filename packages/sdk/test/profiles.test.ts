@@ -5,7 +5,7 @@ import * as lib from "@forshtat/hegota-support/tx";
 import type { FrameTx } from "@forshtat/hegota-support/tx";
 import { encodeEnvelope, sigHash as hegotaSigHash } from "../src/codec-hegota.js";
 import { PROFILES, profileOf } from "../src/profiles.js";
-import { EMPTY_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeRootTuples, rawOf, refsOf, sigHashOf, txHashOf, verifyIndex } from "../src/frame.js";
+import { EMPTY_PROOF, EMPTY_WITHDRAW_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeRootTuples, rawOf, refsOf, sigHashOf, txHashOf, verifyIndex } from "../src/frame.js";
 import { POOL_ABI } from "../src/chain.js";
 import { DEVNET_TRACER } from "../src/profiles.js";
 
@@ -71,7 +71,7 @@ test("devnet-8421: the same bytes as the library's own builder, so the profile r
         lib.frame(DEVNET_TRACER, "SENDER", { target: p.pool, execution: LIMITS.senderExecution, state: LIMITS.senderState, data: buildWithdrawal(devnet, p).frames[1].data }),
         lib.frame(DEVNET_TRACER, "DEFAULT", { target: p.pool, execution: LIMITS.refundExecution, data: buildWithdrawal(devnet, p).frames[2].data }),
       ],
-      signatures: [{ scheme: lib.sigScheme(DEVNET_TRACER, "ARBITRARY"), signer: "0x", msg: "0x", signature: EMPTY_PROOF }],
+      signatures: [{ scheme: lib.sigScheme(DEVNET_TRACER, "ARBITRARY"), signer: "0x", msg: "0x", signature: EMPTY_WITHDRAW_PROOF }],
       fees: { maxFeePerGas: p.maxFeePerGas, maxPriorityFeePerGas: p.maxPriorityFeePerGas },
     }),
     recentRootReferences: p.refs,
