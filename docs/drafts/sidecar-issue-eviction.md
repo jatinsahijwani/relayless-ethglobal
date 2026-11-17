@@ -17,12 +17,14 @@ The pending case is the same race, seen one block later. REPUTATION-310 is in th
 
 **Why it matters most for shared senders.** With EIP-8250 keyed nonces one sender can serve many independent users. A privacy pool is the example: every user's withdrawal is the pool's transaction, under a fresh nonce key. Any one user can send two versions of the same withdrawal to two nodes. Without gossip between them, every node that didn't mine it charges the pool one `seen` with no `included`, and that `seen` stands for a transaction that was in fact included elsewhere.
 
-**Measured.** Local devnet, ethrex `9aa3645d`, two sidecar instances with no gossip between them, with the replacement-counting fix applied. Two notes, each sent as conflicting transactions to both nodes:
+**Measured** (2026-11-17, re-run with a reproducible harness). Local devnet, ethrex `9aa3645d`, two sidecar instances from `2e22ff0a` with no gossip between them (A mines, B is in manual mode), fresh reputation. Three notes, each sent as two conflicting withdrawals, one version to each node:
 
-| | `seen` | `included` |
+| | `seen` before → after | `included` before → after |
 |---|---|---|
-| Mining node | +2 | +2 |
-| Non-mining node | **2** | **0** |
+| Mining node A | 6 → 9 | 4 → 9 |
+| Non-mining node B | **0 → 3** | **0 → 0** |
+
+Each note was spent exactly once. The same result with and without the replacement-counting fix, which doesn't touch this path. Harness and raw results: `research/shared-sender/` in [Relayless](https://github.com/jatinsahijwani/relayless-ethglobal).
 
 At ERC-8421's thresholds, a sender is throttled at about 110 such conflicting pairs and banned at about 510, per non-mining node (calculated, not run to completion). Each pair costs the attacker one real withdrawal's fee.
 
@@ -55,7 +57,7 @@ The check reads one storage slot per key, only for entries that already failed r
 **Questions for the authors.** Is this the intended reading of PROPAGATION-040 for pending transactions? If yes, should the ERC say it in LIFECYCLE-040 or the REPUTATION rules too?
 
 ## Notes for the author
-- The measurement is from Stage 1 (`scripts/grief-experiment.ts`, two sidecars, no gossip). The Part D harness re-runs it, so check `research/shared-sender/RESULTS.md` for current numbers before sending, and update the table if they differ.
+- The table is from the Part D harness run on 2026-11-17 (`research/shared-sender/results/sidecar-nofix.json`, and `sidecar-fix.json` for the "with the fix" claim). Stage 1's `scripts/grief-experiment.ts` measured the same shape (`seen 2, included 0` for two pairs).
 - The throttle and ban counts come from `docs/reputation-analysis.md`, and are calculated.
 - `nonceManager.currentSeq` in the sketch is illustrative. The sidecar reads keyed nonces through its existing frame-transaction code, which the real change should reuse.
 
