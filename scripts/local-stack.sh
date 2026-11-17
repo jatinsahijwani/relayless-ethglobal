@@ -61,6 +61,14 @@ fi
 set -a; . ./.env; set +a
 
 CONFIG="$WORK/sidecar-config.json"
+# A new genesis (for example after Docker quit and the beacons lost each other) leaves the cached addresses pointing at
+# nothing, so check them against the chain rather than trusting the files.
+if [ -f "$WORK/registry" ] && [ "$(cast code "$(cat "$WORK/registry")" --rpc-url "$RPC" 2>/dev/null || echo 0x)" = "0x" ]; then
+  echo "the cached staking registry isn't on this chain (new genesis?): redeploying it and refunding the faucet"
+  mv "$WORK/registry" "$WORK/registry.stale"; mv "$WORK/faucet.key" "$WORK/faucet.key.stale" 2>/dev/null || true
+  pkill -f 'skandha.js standalone' || true
+  [ -d "$WORK/skandha-data" ] && mv "$WORK/skandha-data" "$WORK/skandha-data.stale.$(date +%s)"
+fi
 if [ ! -f "$WORK/registry" ]; then
   node scripts/deploy-registry.mjs "$SIDECAR/deploy/predeploy/src/contracts/NaiveStakingRegistry.sol" > "$WORK/registry"
 fi
@@ -90,3 +98,5 @@ npx tsx scripts/deploy.ts local
 echo
 echo "Ready. Run the app with: pnpm web"
 echo "Stop with: pkill -f 'skandha.js standalone'; (cd '$SIDECAR/deploy/devnet' && docker compose stop)"
+echo "If the chain stops producing blocks after a restart (beacons with no peers), start over with:"
+echo "  (cd '$SIDECAR/deploy/devnet' && LIGHTHOUSE_BEACON_1_IP=0.0.0.0 LIGHTHOUSE_BEACON_1_ENR=x GENESIS_TIMESTAMP=0 docker compose down && mv data data.old.\$(date +%s)) && scripts/local-stack.sh"
