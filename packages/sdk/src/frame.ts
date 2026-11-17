@@ -18,7 +18,10 @@ const SCOPE_EXECUTION_AND_PAYMENT = 3;
 const ARBITRARY = 0;
 
 export const LIMITS = {
-  verifyExecution: 300_000n,
+  // Declared, and counted against a node's verify budget. Worst case used: about 240,000 (a devnet-8421 ragequit, which
+  // pays the nullifier key's 20,000 first use here). With the 8,000 root frame and the signature, hegota-8141 declares
+  // 268,100, under Nethermind's 300,000 default. A VERIFY frame that ran out would only make the transaction invalid.
+  verifyExecution: 260_000n,
   senderExecution: 1_500_000n, // must be at least the validator's minimum
   senderState: 1_000_000n, // must be at least the validator's minimum
   refundExecution: 150_000n,
