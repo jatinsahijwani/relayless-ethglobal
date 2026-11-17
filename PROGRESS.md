@@ -1,5 +1,17 @@
 # Progress
 
+## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
+
+### Part A: post-merge check and small fixes
+| Step | State |
+|---|---|
+| PR #5 merged | Yes, 2026-11-17 05:44 UTC, merge commit `9e9536c`. `main`'s README has `## Public testnet` at line 156, and the status table's `#public-testnet` link resolves to it |
+| Plain-text mentions linked | `docs/testnet-run.md` (2), `PROGRESS.md` (2) |
+| `docs/landscape.md` | Corrected: chain 8141 runs ethrex `64b8fc09`, which relaxes one-pending-per-sender for disjoint nonce keys and has no width budget. MATCHA is in `247e2dd2`, on by default. Both checked against minimal-shielded-pool's SECURITY.md on 2026-11-17. Chain 8141 results added to "Where Relayless is different", and the out-of-date "catch up" bullets fixed |
+| CI on `main` | Green on `9e9536c` (`unit` passed; `e2e` runs on dispatch and nightly only). The `relayless-ens` Vercel project still fails, as expected; that's a Vercel setting |
+
+**Noticed in the live SECURITY.md:** `247e2dd2` panics when a top-level frame calls a precompile after an earlier frame emitted logs, which can stop a node producing blocks. No Relayless frame targets a precompile (the validator calls the pairing precompile from inside the pool's VERIFY frame), but the Part D harness on `247e2dd2` has to watch for it.
+
 ## Stage 2: refocus (branch `refocus`, started 2026-11-16)
 The positioning is `docs/landscape.md`. The hackathon version stays reachable at the tag `v1.0-ethglobal-mumbai`, and everything below the Stage 2 sections describes it.
 
