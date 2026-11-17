@@ -85,6 +85,7 @@ jobs:
           pnpm e2e:asp local-hegota-asp
           npx tsx scripts/adversarial.ts local-hegota
           npx tsx scripts/gas-floors.ts local-hegota
+          npx tsx scripts/alias.ts local-hegota
 
       - name: devnet-8421 suites
         if: matrix.profile == 'devnet-8421'
@@ -96,3 +97,4 @@ jobs:
           pnpm e2e:asp local-asp
           npx tsx scripts/adversarial.ts local
           npx tsx scripts/gas-floors.ts local
+          npx tsx scripts/alias.ts local
