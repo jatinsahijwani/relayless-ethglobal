@@ -1,6 +1,6 @@
 import { serializeTypedData, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { BrowserStore, Relayless, httpAssociationSet, type Prover, type Signer } from "@relayless/sdk";
+import { BrowserStore, Relayless, allowlistProvider, type Prover, type Signer } from "@relayless/sdk";
 import { nonceSettled, rpc } from "@relayless/sdk/chain";
 import { cfg } from "./config";
 
@@ -94,11 +94,11 @@ export async function browserSigner(): Promise<Signer> {
   };
 }
 
-/** `choice` is an ASP picked from the ENS directory, which brings its own pool: each pool takes roots from one ASP. */
-export const connectPool = (signer: Signer, choice?: { pool: Address; endpoint: string | null }) => {
-  const aspUrl = choice ? choice.endpoint : cfg.aspUrl;
-  return Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: choice?.pool ?? cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: aspUrl ? httpAssociationSet(aspUrl) : undefined });
-};
+/** The pool's association set, if it has one. The reference allowlist ASP here; any `AssociationSetProvider` fits. */
+export const associationSet = () => (cfg.aspUrl ? allowlistProvider(cfg.aspUrl) : undefined);
+
+export const connectPool = (signer: Signer) =>
+  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, profile: cfg.profile, pool: cfg.pool, signer, prover, store: new BrowserStore(), chainId: cfg.chainId, feeRange: cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined, asp: associationSet() });
 
 export const walletBalance = async (a: Address) => BigInt(await rpc(cfg.rpc, "eth_getBalance", [a, "latest"]));
 

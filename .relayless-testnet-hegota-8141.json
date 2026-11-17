@@ -1,0 +1,49 @@
+{
+  "network": "hegota-8141",
+  "profile": "hegota-8141",
+  "pool": "0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225",
+  "validator": "0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c",
+  "at": "2026-11-16T16:41:02.556Z",
+  "rows": [
+    {
+      "step": "Deposit",
+      "ok": true,
+      "txs": [
+        "0x918de453d28bd9b79a4d12235aa26a21c0e04d789f15b3b20fed448a9ea5175e"
+      ],
+      "detail": "5 deposits of 0.02 ETH, first shown"
+    },
+    {
+      "step": "Private withdrawal to a fresh address holding 0 ETH",
+      "ok": true,
+      "txs": [
+        "0x9671febcc7365da4f5761559979b6776e0271ff12efbb6e6eac7ba508ffc2ef4"
+      ],
+      "detail": "0xF0856e885d071d47B270ff93a09C4552C075F3b7 went from 0 to 0.014998939941579643 ETH; frames 0x1 0x1 0x1 0x1; root frame 5579 gas, pool VERIFY 233383"
+    },
+    {
+      "step": "Double spend of the same note, refused before broadcast",
+      "ok": true,
+      "txs": [],
+      "detail": "simulation failed, not broadcast: Invalid Transaction: Nonce mismatch: expected 1, got 0 (head slot 904126, root slots 904123)"
+    },
+    {
+      "step": "Concurrent withdrawals from the one pool sender",
+      "ok": true,
+      "txs": [
+        "0x9a4f521d474c685cee9d02eaf254948e6a921806c398e4a1e9692093f3489ce1",
+        "0x0511e1786a9484325b565937815f5868d6e62731803dfb712eac839eb7f5a59a",
+        "0x9679fdd5303c63c614ce1d3dcb277a2ab453b1134f11c6b39a2de526097c6508"
+      ],
+      "detail": "3 of 3 pending at once right after sending, mined in blocks 851714, 851715, 851715. Chain 8141 relaxes one-pending-per-sender for disjoint nonce keys; it has no MATCHA width budget"
+    },
+    {
+      "step": "Public exit (ragequit) to the depositor",
+      "ok": true,
+      "txs": [
+        "0x12b5c7f75cf85729adc4532f861497fb2ba9c1ad375bb80d4057ef6798b004e9"
+      ],
+      "detail": "paid 0x5D5d4dFA43B84D3A7a29bdaBc4850941B5195e61"
+    }
+  ]
+}

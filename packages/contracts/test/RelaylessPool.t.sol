@@ -90,7 +90,7 @@ contract RelaylessPoolTest is Test {
         vm.etch(RECENT_ROOT, address(new MockRecentRoot()).code);
         roots = MockRecentRoot(RECENT_ROOT);
         registry = new MockRegistry();
-        pool = new RelaylessPool{value: STAKE + RESERVE}(makeAddr("validator"), address(registry), STAKE, 86400, bytes32(0));
+        pool = new RelaylessPool{value: STAKE + RESERVE}(makeAddr("validator"), address(registry), STAKE, 86400, bytes32(0), RECENT_ROOT);
         vm.deal(alice, 100 ether);
     }
 
@@ -115,6 +115,31 @@ contract RelaylessPoolTest is Test {
         assertEq(address(pool).balance, RESERVE);
         assertEq(pool.reserve(), RESERVE);
         assertEq(pool.liabilities(), 0);
+    }
+
+    /// A chain with no alt mempool has no staking registry: the whole value becomes the reserve.
+    function test_withoutARegistryNothingIsStaked() public {
+        RelaylessPool open = new RelaylessPool{value: RESERVE}(makeAddr("validator"), address(0), 0, 0, bytes32(0), RECENT_ROOT);
+        assertEq(address(open).balance, RESERVE);
+        assertEq(open.reserve(), RESERVE);
+    }
+
+    function test_withoutARegistryAStakeIsRefused() public {
+        vm.expectRevert(RelaylessPool.BadValue.selector);
+        new RelaylessPool{value: RESERVE}(makeAddr("validator"), address(0), STAKE, 0, bytes32(0), RECENT_ROOT);
+    }
+
+    /// Roots go to whichever recent-root contract the profile names, not a hardcoded address.
+    function test_rootsGoToTheConfiguredRecentRootContract() public {
+        address other = 0x8272D9679689Ea2f307140CdF9002D27dC00Ffff;
+        vm.etch(other, address(new MockRecentRoot()).code);
+        RelaylessPool moved = new RelaylessPool{value: RESERVE}(makeAddr("validator"), address(0), 0, 0, bytes32(0), other);
+        assertEq(moved.RECENT_ROOT(), other);
+        uint256 before = roots.writes();
+        vm.prank(alice);
+        moved.deposit{value: 1 ether}(42);
+        assertEq(MockRecentRoot(other).writes(), 1);
+        assertEq(roots.writes(), before);
     }
 
     function test_depositInsertsTheExpectedCommitment() public {

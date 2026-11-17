@@ -26,7 +26,7 @@ export function localSigner(cfg: any, key: Hex): Signer {
 export const feeRangeOf = (cfg: any) => (cfg.feeRange ? { min: BigInt(cfg.feeRange.min), max: BigInt(cfg.feeRange.max) } : undefined);
 
 export const connect = (cfg: any, key: Hex) =>
-  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, feeRange: feeRangeOf(cfg) });
+  Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, profile: cfg.profile, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, feeRange: feeRangeOf(cfg) });
 
 export async function mined(cfg: any, hash: Hex) {
   for (let i = 0; i < 90; i++) {

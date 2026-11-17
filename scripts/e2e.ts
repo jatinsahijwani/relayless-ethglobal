@@ -3,7 +3,7 @@
 import { writeFileSync } from "node:fs";
 import { encodeFunctionData, keccak256, parseEther, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { NullifierInFlightError, POOL_ABI, type Note } from "@relayless/sdk";
+import { NullifierInFlightError, POOL_ABI, profileOf, rawOf, type Note } from "@relayless/sdk";
 import { balanceOf, connect, fundedKey, loadConfig, mined, rpc, stopWorkers } from "./lib.js";
 
 const network = process.argv[2] ?? "local";
@@ -22,8 +22,12 @@ const eth = (w: bigint) => `${Number(w) / 1e18} ETH`;
 const freshAddr = (): Address => privateKeyToAccount(keccak256(toHex(`fresh:${Math.random()}`))).address;
 const reserveOf = async () => BigInt(await rpc(cfg.rpc, "eth_call", [{ to: cfg.pool, data: encodeFunctionData({ abi: POOL_ABI, functionName: "reserve" }) }, "latest"]));
 const receiptFrames = (r: any) => (r.frameReceipts ?? []).map((f: any) => f.status === "0x1");
+const profile = profileOf(cfg.profile);
+const altMempool = profile.submit === "alt-mempool";
+// The pool's VERIFY frame; the SENDER frame follows it. hegota-8141 puts EIP-8272's root frame in front.
+const V = profile.rootCarrier === "frame" ? 1 : 0;
 
-console.log(`\n== ${network}: pool ${cfg.pool}\n`);
+console.log(`\n== ${network} (${profile.id}): pool ${cfg.pool}\n`);
 
 const userKey = await fundedKey(cfg, deployerKey, "user", parseEther("5"));
 const rl = await connect(cfg, userKey);
@@ -58,12 +62,15 @@ check("the pool's balance moved by exactly what it paid out plus gas", paid > 0n
 
 const f = receipt.frameReceipts;
 const gas = {
+  profile: profile.id,
   txHash: h.hash,
   total: Number(receipt.gasUsed),
-  verifyFrame: Number(f[0].gasUsed),
-  senderExecution: Number(f[1].gasUsed),
-  senderState: Number(f[1].stateGasUsed),
-  refundFrame: Number(f[2].gasUsed),
+  rootFrame: V ? Number(f[0].gasUsed) : null,
+  verifyFrame: Number(f[V].gasUsed),
+  verifyState: Number(f[V].stateGasUsed ?? 0),
+  senderExecution: Number(f[V + 1].gasUsed),
+  senderState: Number(f[V + 1].stateGasUsed),
+  refundFrame: Number(f[V + 2].gasUsed),
   leafCount: (await rl.sync()).leaves.length,
 };
 console.log("      gas:", JSON.stringify(gas));
@@ -92,7 +99,7 @@ try {
 } catch (e: any) {
   chainRefused = e.message;
 }
-check("a forced double spend is invalid before broadcast", /Nonce mismatch/i.test(chainRefused), chainRefused.slice(0, 80));
+check("a forced double spend is invalid before broadcast", /simulation failed, not broadcast/.test(chainRefused) && /nonce/i.test(chainRefused), chainRefused.slice(0, 100));
 
 // ---- One nullifier, one pending transaction ----
 const ledgerNote = (await rl.notes()).find((n) => !n.spent && n.value === parseEther("0.2")) as Note;
@@ -119,8 +126,12 @@ check("a fee bump replaces it, and only one lands", (await rl.notes()).filter((n
 const concurrentNotes = (await rl.notes()).filter((n) => !n.spent && n.value >= parseEther("0.03")).slice(0, 3);
 const handles = await Promise.all(concurrentNotes.map((n) => rl.withdraw({ to: freshAddr(), amount: parseEther("0.02"), note: n })));
 const stillPending = (await Promise.all(handles.map((x) => rpc(cfg.rpc, "eth_getTransactionReceipt", [x.hash])))).filter((r) => r === null).length;
-check("3 withdrawals pending at once from the one pool sender", handles.length === 3 && stillPending >= 2, `${stillPending} of 3 still pending right after admission`);
 const landed = await Promise.all(handles.map((x) => x.wait()));
+// Held at once: still pending together after the last was admitted, or mined together in one block. On a chain with
+// fast blocks the first may already be mined, so the shared block is the evidence.
+const blocks = landed.map((r) => (r ? Number(r.blockNumber) : -1));
+const sharedBlock = blocks.some((b, i) => b >= 0 && blocks.indexOf(b) !== i);
+check("3 withdrawals pending at once from the one pool sender", handles.length === 3 && (stillPending >= 2 || sharedBlock), `${stillPending} of 3 pending after admission, mined in blocks ${blocks.join(", ")}`);
 check("all of them land", landed.every((r) => r?.status === "0x1"));
 
 // ---- The SENDER frame cannot revert: recipient refuses the payment ----
@@ -133,7 +144,7 @@ const rejecter = rejecterReceipt.contractAddress as Address;
 const refusing = (await rl.notes()).find((n) => !n.spent && n.value >= parseEther("0.03")) as Note;
 const refusedPay = await rl.withdraw({ to: rejecter, amount: parseEther("0.02"), note: refusing });
 const refusedReceipt = await refusedPay.wait();
-check("a refusing recipient does not revert the SENDER frame", refusedReceipt.frameReceipts[1].status === "0x1");
+check("a refusing recipient does not revert the SENDER frame", refusedReceipt.frameReceipts[V + 1].status === "0x1");
 const owed = BigInt(await rpc(cfg.rpc, "eth_call", [{ to: cfg.pool, data: encodeFunctionData({ abi: POOL_ABI, functionName: "claimable", args: [rejecter] }) }, "latest"]));
 check("the refused payment is kept as a claim, not lost", owed > 0n, eth(owed));
 check("and the change note survives", (await rl.notes()).some((n) => !n.spent && n.value === refusing.value - parseEther("0.02")));
@@ -179,19 +190,41 @@ const batchKey = await fundedKey(cfg, deployerKey, "batcher", parseEther("1"));
 const batcher = await connect(cfg, batchKey);
 for (let i = 0; i < 3; i++) await mined(cfg, (await batcher.deposit({ amount: parseEther("0.05") })).hash);
 const batch = await batcher.payMany([freshAddr(), freshAddr(), freshAddr()].map((to) => ({ to, amount: parseEther("0.01") })));
-const listed = await rpc(cfg.mempool, "skandha_explorer_listTransactions", [{ limit: 50 }]);
-const batchKeys = new Set(listed.items.filter((t: any) => batch.some((b) => b.hash === t.txHash)).flatMap((t: any) => t.nonceKeys.map(String)));
-check("payMany: the node lists all 3 at once, each with its own nonce key", batchKeys.size === 3, `${batchKeys.size} keys listed`);
+let batchKeys = new Set<string>();
+if (altMempool) {
+  const listed = await rpc(cfg.mempool, "skandha_explorer_listTransactions", [{ limit: 50 }]);
+  batchKeys = new Set(listed.items.filter((t: any) => batch.some((b) => b.hash === t.txHash)).flatMap((t: any) => t.nonceKeys.map(String)));
+} else {
+  // The public mempool. Not txpool_content: it keys a sender's transactions by nonce sequence, and every withdrawal
+  // uses sequence 0, so it shows one. Each hash is asked for directly instead: known to the node, pending or mined.
+  const known = await Promise.all(batch.map((b) => rpc(cfg.rpc, "eth_getTransactionByHash", [b.hash])));
+  batchKeys = new Set(known.flatMap((t: any) => (t ? (t.nonceKeys ?? []).map((k: string) => BigInt(k).toString()) : [])));
+}
+check("payMany: the node takes all 3 at once, each with its own nonce key", batchKeys.size === 3, `${batchKeys.size} keys`);
 check("payMany: all 3 land", (await Promise.all(batch.map((b) => b.wait()))).every((r) => r === null || r.status === "0x1"));
 
-// ---- The mempool comparison: a dry run on both nodes, which changes nothing ----
-const repOf = async () => (await rpc(cfg.mempool, "skandha_explorer_listReputation", [{ limit: 200 }])).items.find((e: any) => e.address?.toLowerCase() === cfg.pool.toLowerCase());
-const lastAdmission = async () => (await rpc(cfg.mempool, "skandha_explorer_listAdmissions", [{ limit: 1 }])).items[0]?.id;
-const compareBefore = { rep: await repOf(), admission: await lastAdmission(), balance: await batcher.balance() };
-const compared = await batcher.compareMempools({ to: freshAddr(), amount: parseEther("0.02") });
-check("dry run: the canonical rules reject the withdrawal, naming the cap", !compared.canonical.admitted && /MAX_VERIFY_GAS/.test(compared.canonical.reason ?? ""), compared.canonical.reason ?? "");
-check("dry run: the alt mempool would admit the same bytes", compared.alt.admitted && compared.alt.staked === true, `${compared.alt.verifyGasUsed} of ${compared.alt.budget} gas`);
-check("dry run: nothing was sent, spent or counted", (await lastAdmission()) === compareBefore.admission && (await batcher.balance()) === compareBefore.balance && (await repOf()).opsSeen <= compareBefore.rep.opsSeen);
+if (altMempool) {
+  // ---- The mempool comparison: a dry run on both nodes, which changes nothing ----
+  const repOf = async () => (await rpc(cfg.mempool, "skandha_explorer_listReputation", [{ limit: 200 }])).items.find((e: any) => e.address?.toLowerCase() === cfg.pool.toLowerCase());
+  const lastAdmission = async () => (await rpc(cfg.mempool, "skandha_explorer_listAdmissions", [{ limit: 1 }])).items[0]?.id;
+  const compareBefore = { rep: await repOf(), admission: await lastAdmission(), balance: await batcher.balance() };
+  const compared = await batcher.compareMempools({ to: freshAddr(), amount: parseEther("0.02") });
+  check("dry run: the canonical rules reject the withdrawal, naming the cap", !compared.canonical.admitted && /MAX_VERIFY_GAS/.test(compared.canonical.reason ?? ""), compared.canonical.reason ?? "");
+  check("dry run: the alt mempool would admit the same bytes", compared.alt.admitted && compared.alt.staked === true, `${compared.alt.verifyGasUsed} of ${compared.alt.budget} gas`);
+  check("dry run: nothing was sent, spent or counted", (await lastAdmission()) === compareBefore.admission && (await batcher.balance()) === compareBefore.balance && (await repOf()).opsSeen <= compareBefore.rep.opsSeen);
+} else {
+  // ---- The public mempool's own verdict on a withdrawal, without sending it ----
+  const notesNow = await batcher.notes();
+  const dryNote = notesNow.find((n) => !n.spent && n.value >= parseEther("0.03")) as Note;
+  const state = await batcher.sync();
+  const head = await rpc(cfg.rpc, "eth_getBlockByNumber", ["latest", false]);
+  const caps = { maxFeePerGas: BigInt(head.baseFeePerGas) * 10n + 1_000_000_000n, maxPriorityFeePerGas: 1_000_000n };
+  const { tx } = await batcher.prepare(dryNote, { to: freshAddr(), amount: parseEther("0.02") }, 0n, state, caps);
+  const sim = await rpc(cfg.rpc, "ethrex_simulateFrameTransaction", profile.simulateParams(rawOf(profile, tx)));
+  const prefix = (sim.frames ?? []).slice(0, V + 1).reduce((s: number, x: any) => s + Number(x.gasUsed), 0);
+  check("dry run: this node's public mempool admits the withdrawal, within its verify budget", sim.valid === true && sim.violation === null, `prefix shape ${sim.prefixShape}, validation frames used ${prefix} gas`);
+  check("dry run: nothing was sent or spent", !(await batcher.isSpent(dryNote.nullifierHash)) && (await batcher.balance()) === notesNow.filter((n) => !n.spent).reduce((a, n) => a + n.value, 0n));
+}
 
 // ---- Public exit ----
 const exitNote = (await rl.notes()).find((n) => !n.spent && n.value >= parseEther("0.03")) as Note;
@@ -205,10 +238,10 @@ check("ragequit pays the original depositor and burns the nullifier", exitReceip
 const report = await rl.anonymity({ amount: parseEther("0.01") });
 check("anonymity meter reports a sane score", report.setSize > 0 && report.minEntropyBits >= 0 && report.minEntropyBits <= report.shannonBits + 1e-9, `H∞ ${report.minEntropyBits.toFixed(2)} bits, H ${report.shannonBits.toFixed(2)} bits, ${report.setSize} candidates`);
 
-const reputation = await rpc(cfg.mempool, "skandha_explorer_listReputation", [{ limit: 50 }]).catch(() => null);
+const reputation = altMempool ? await rpc(cfg.mempool, "skandha_explorer_listReputation", [{ limit: 50 }]).catch(() => null) : null;
 const poolRep = reputation?.items?.find((e: any) => e.address?.toLowerCase() === cfg.pool.toLowerCase());
 if (poolRep) console.log(`      pool reputation: seen ${poolRep.opsSeen}, included ${poolRep.opsIncluded}, ${poolRep.status}, staked ${poolRep.isStaked}`);
-check("honest use keeps the pool's reputation ok", !poolRep || poolRep.status === "ok", poolRep ? `seen ${poolRep.opsSeen}, included ${poolRep.opsIncluded}` : "no explorer data");
+if (altMempool) check("honest use keeps the pool's reputation ok", !poolRep || poolRep.status === "ok", poolRep ? `seen ${poolRep.opsSeen}, included ${poolRep.opsIncluded}` : "no explorer data");
 
 writeFileSync(`.relayless-e2e-${network}.json`, JSON.stringify({ network, pool: cfg.pool, at: new Date().toISOString(), gas, results, headlineTx: h.hash }, null, 2));
 console.log(`\n${results.length - failures}/${results.length} passed\n`);

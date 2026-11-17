@@ -33,3 +33,13 @@ export function siblings(leaves: bigint[], index: number): bigint[] {
   while (out.length < TREE_DEPTH) out.push(0n);
   return out;
 }
+
+/** The root a LeanIMT inclusion proof implies, by the circuit's rule: a 0 sibling means the node moves up unchanged. */
+export function rootFromProof(leaf: bigint, index: number, sibs: bigint[]): bigint {
+  let node = leaf;
+  for (let i = 0; i < sibs.length; i++) {
+    if (sibs[i] === 0n) continue;
+    node = (index >> i) & 1 ? poseidon2([sibs[i], node]) : poseidon2([node, sibs[i]]);
+  }
+  return node;
+}

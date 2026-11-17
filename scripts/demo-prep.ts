@@ -4,17 +4,15 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { encodeFunctionData, parseEther, type Hex } from "viem";
-import { POOL_ABI, createEnsReader, crossCheckRoot } from "@relayless/sdk";
+import { POOL_ABI, checkRecentRoot, profileOf } from "@relayless/sdk";
 import { balanceOf, connect, rpc, stopWorkers } from "./lib.js";
 import { fetchPoolState } from "../packages/sdk/src/chain.js";
-import { loadEnsConfig } from "./ens/lib.js";
 import { DEMO_NETWORK, SEED_COUNT, aspSet, cfg, readDemoWallet, seedAddress } from "./demo-lib.js";
 
 const ROOT_LIFE_SLOTS = 8191;
 /** Below this, a recording could outlast the root. An hour is 600 slots. */
 const MIN_ROOT_SLOTS_LEFT = 1200;
 const WEB = process.env.RELAYLESS_WEB_URL ?? "http://127.0.0.1:5199";
-const WORLD_ASP = "http://127.0.0.1:8790";
 
 interface Fix { label: string; run(): Promise<void> | void }
 const results: { ok: boolean; name: string; detail: string; fix?: Fix; manual?: string }[] = [];
@@ -43,7 +41,7 @@ const pnpmScript = (script: string): Fix => ({
 const seedFix = pnpmScript("demo:seed");
 const resetFix = pnpmScript("demo:reset");
 const aspFix: Fix = {
-  label: "start the demo ASP on 8791",
+  label: "start the demo ASP on 8790",
   async run() {
     spawn("scripts/demo-asp.sh", { detached: true, stdio: "ignore" }).unref();
     await new Promise((r) => setTimeout(r, 6000));
@@ -88,21 +86,12 @@ await check("Pool gas reserve is funded", async () => {
   return { ok: reserve >= parseEther("0.1"), detail: `${Number(reserve) / 1e18} ETH`, manual: reserve >= parseEther("0.1") ? undefined : "call fundReserve() on the pool" };
 });
 
-const aspUp = await check("Demo pool's ASP is up (allowlist, 8791)", async () => {
+const aspUp = await check("Demo pool's ASP is up (allowlist, 8790)", async () => {
   const res = await fetch(`${cfg.aspUrl}/config`, { signal: AbortSignal.timeout(4000) }).catch(() => null);
   if (!res?.ok) return { ok: false, detail: "no answer", fix: aspFix };
-  const body = (await res.json()) as { allowlist?: boolean };
-  return { ok: Boolean(body.allowlist), detail: body.allowlist ? "allowlist policy" : "running without the allowlist policy", fix: body.allowlist ? undefined : aspFix };
-});
-
-await check("World ID ASP is up (8790), for the World ID segment", async () => {
-  const res = await fetch(`${WORLD_ASP}/config`, { signal: AbortSignal.timeout(4000) }).catch(() => null);
-  if (!res?.ok) return { ok: false, detail: "no answer", manual: "RELAYLESS_NETWORK=local-asp ASP_ENS_LABEL=world ASP_ALLOWED_ORIGIN=http://127.0.0.1:5199 pnpm --filter @relayless/asp start" };
-  const body = (await res.json()) as { enabled: boolean; environment: string };
-  const set = (await (await fetch(`${WORLD_ASP}/set`)).json()) as { ref: { slot: string } | null };
-  const slot = BigInt((await headBlock()).slotNumber);
-  const left = set.ref ? BigInt(ROOT_LIFE_SLOTS) - (slot - BigInt(set.ref.slot)) : 0n;
-  return { ok: body.enabled && left > BigInt(MIN_ROOT_SLOTS_LEFT), detail: `World ID ${body.enabled ? "on" : "off"} (${body.environment}), root has ${Number(left)} slots left`, manual: "restart that ASP: it republishes its root on start" };
+  const body = (await res.json()) as { policy?: string; sourceId?: string };
+  const sourceOk = body.sourceId?.toLowerCase() === String(cfg.aspSourceId).toLowerCase();
+  return { ok: body.policy === "allowlist" && sourceOk, detail: sourceOk ? `${body.policy} policy, source matches the pool` : "its source isn't the one this pool accepts", fix: sourceOk ? undefined : aspFix };
 });
 
 await check("Web app responds, on the demo pool", async () => {
@@ -114,16 +103,11 @@ await check("Web app responds, on the demo pool", async () => {
   return { ok: true, detail: WEB };
 });
 
-await check("Sepolia RPC and the ENS directory resolve", async () => {
-  const ens = loadEnsConfig();
-  const list = await createEnsReader(ens).listAsps();
-  const allow = list.find((a: any) => a.label === "allowlist");
-  const world = list.find((a: any) => a.label === (ens as any).names.worldAspLabel);
-  if (!allow || !world) return { ok: false, detail: `found ${list.map((a: any) => a.label).join(", ")}` };
-  const salt = (ens as any).aspSaltPreimage;
-  const [c1, c2] = await Promise.all([crossCheckRoot(world, { rpc: cfg.rpc, saltPreimage: salt }), crossCheckRoot(allow, { rpc: cfg.rpc, saltPreimage: salt })]);
-  const ok = c1.status === "verified" && c2.status === "verified";
-  return { ok, detail: `${list.length} ASPs, roots against the chain: world ${c1.status}, allowlist ${c2.status}`, fix: c2.status === "verified" ? undefined : resetFix, manual: c1.status === "verified" ? undefined : "restart the World ID ASP: it republishes its root on start" };
+await check("ASP's current root is on the chain", async () => {
+  const set = await aspSet();
+  if (!set.ref) return { ok: false, detail: "nothing approved yet", fix: resetFix };
+  const r = await checkRecentRoot(cfg.rpc, { sourceId: set.ref.sourceId, slot: BigInt(set.ref.slot), root: set.ref.root }, profileOf(cfg.profile).recentRoot);
+  return { ok: r.status === "verified", detail: `recent-root check: ${r.status}`, fix: r.status === "verified" ? undefined : resetFix };
 });
 
 const state = await fetchPoolState(cfg.rpc, cfg.pool).catch(() => null);

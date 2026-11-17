@@ -6,6 +6,8 @@ export interface InFlight {
   sentAt: number;
   maxFeePerGas: string;
   maxPriorityFeePerGas: string;
+  /** Wei the pending transaction can take from the pool: the payment, which includes its fee. Absent on older entries. */
+  reserved?: string;
 }
 
 export interface InFlightStore {

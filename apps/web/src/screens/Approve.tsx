@@ -1,131 +1,62 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
+import type { ApprovalStatus } from "@relayless/sdk";
 import type { Session } from "../App";
-import { Button, Problem, Screen, plainError } from "../ui";
+import { Button, Problem, Screen, eth } from "../ui";
 import { cfg } from "../config";
+import { associationSet } from "../wallet";
 
-interface AspConfig { allowlist?: boolean; enabled: boolean; app_id: `app_${string}` | null; action: string; environment: "production" | "staging" }
+interface AspConfig { policy: string; operator?: string }
 
-/** Why a verification didn't complete, and what to do. Every path ends somewhere: nobody is stuck. */
-export function worldErrorMessage(code: string): string {
-  switch (code) {
-    case "user_rejected":
-    case "cancelled":
-      return "You cancelled, so nothing was shared and nothing changed. You can try again whenever you like.";
-    case "credential_unavailable":
-    case "world_id_3_not_available":
-    case "world_id_4_not_available":
-      return "This needs a World ID verified at an Orb, and this account doesn't have one. You can still get your money back with a public exit.";
-    case "max_verifications_reached":
-    case "nullifier_replayed":
-      return "This World ID has already been used to approve an address. You can still get your money back with a public exit.";
-    case "timeout":
-    case "connection_failed":
-      return "World App didn't respond in time. Nothing changed. Try again.";
-    case "verification_rejected":
-      return "You declined in World App, so nothing changed.";
-    default:
-      return `World ID couldn't complete this (${code}). Nothing changed. Try again, or use a public exit.`;
-  }
-}
+const STATUS_TEXT: Record<ApprovalStatus, string> = {
+  approved: "Approved: can leave privately",
+  pending: "Waiting for review",
+  declined: "Declined: public exit only",
+  unknown: "Not approved yet",
+};
 
+/** Works with any association set provider: it only asks for each note's status. */
 export function Approve({ s }: { s: Session }) {
   const [config, setConfig] = useState<AspConfig | null>(null);
-  const [approved, setApproved] = useState(false);
-  const [rpContext, setRpContext] = useState<any>(null);
-  const [widget, setWidget] = useState<{ Widget: ComponentType<any>; preset: any } | null>(null);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [statuses, setStatuses] = useState<Map<string, ApprovalStatus> | null>(null);
   const [error, setError] = useState("");
-  // Whether this attempt has already ended in an answer, so closing the window afterward says nothing more.
-  const settled = useRef(false);
-
-  const closed = (isOpen: boolean) => {
-    setOpen(isOpen);
-    if (!isOpen && !settled.current) {
-      settled.current = true;
-      setError(worldErrorMessage("cancelled"));
-    }
-  };
-
-  const checkApproved = async () => {
-    const res = await fetch(`${cfg.aspUrl}/set`);
-    if (!res.ok) return;
-    const { labels } = (await res.json()) as { labels: string[] };
-    const mine = s.notes.filter((n) => !n.spent);
-    setApproved(mine.length > 0 && mine.every((n) => labels.includes(n.label.toString())));
-  };
+  const unspent = s.notes.filter((n) => !n.spent);
 
   useEffect(() => {
-    fetch(`${cfg.aspUrl}/config`).then((r) => r.json()).then(setConfig).catch(() => setError("The approval server isn't reachable right now. You can still use a public exit."));
-    checkApproved().catch(() => {});
+    const provider = associationSet();
+    if (!provider) return;
+    // The reference server describes its policy. Another provider may not, and the statuses below still work.
+    fetch(`${cfg.aspUrl}/config`).then((r) => (r.ok ? r.json() : null)).then(setConfig).catch(() => {});
+    Promise.all(unspent.map(async (n) => [n.label.toString(), await provider.status(n.label)] as const))
+      .then((pairs) => setStatuses(new Map(pairs)))
+      .catch(() => setError("The approval server isn't reachable right now. You can still use a public exit."));
   }, [s.notes]);
 
-  const begin = async () => {
-    setBusy(true); setError("");
-    try {
-      const res = await fetch(`${cfg.aspUrl}/rp-context`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).message);
-      setRpContext(await res.json());
-      // Loaded only here, so nothing talks to World until the user asks.
-      const idkit = await import("@worldcoin/idkit");
-      setWidget({ Widget: idkit.IDKitRequestWidget as ComponentType<any>, preset: idkit.orbLegacy({ signal: s.signer.address }) });
-      settled.current = false;
-      setOpen(true);
-    } catch (e) { setError(plainError(e)); } finally { setBusy(false); }
-  };
-
-  // Runs before success is shown. The server's answer decides, never the browser's.
-  const verifyOnServer = async (result: unknown) => {
-    if (!s.signer.signMessage) throw new Error("This wallet can't sign messages.");
-    const message = `Join the Relayless approved set for pool ${cfg.pool.toLowerCase()} as ${s.signer.address.toLowerCase()}`;
-    const signature = await s.signer.signMessage(message);
-    const res = await fetch(`${cfg.aspUrl}/join`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ depositor: s.signer.address, signature, result }) });
-    settled.current = true;
-    if (!res.ok) {
-      const message = (await res.json()).message as string;
-      setError(message);
-      throw new Error(message);
-    }
-  };
+  const approvedAll = statuses !== null && unspent.length > 0 && unspent.every((n) => statuses.get(n.label.toString()) === "approved");
 
   return (
     <Screen title="Get approved">
-      <p className="mb-3 max-w-md">This pool only lets approved money leave privately. Show you're one real person, and every deposit from this wallet is approved.</p>
-      <p className="mb-5 max-w-md text-slate">World ID proves that without sharing your name or documents. We keep a private code that stops one person approving many wallets, linked to this wallet, which is already public because it added money.</p>
-
-      {approved ? (
-        <p role="status" className="border-l-4 border-pool pl-3">You're approved. You can pay privately now.</p>
-      ) : config?.allowlist ? (
-        <p className="max-w-md border-l-4 border-line pl-3">On this pool the ASP's operator approves deposits directly. World ID isn't used here.</p>
-      ) : config?.enabled ? (
-        <Button disabled={busy} onClick={begin}>{busy ? "Opening…" : "Verify with World ID"}</Button>
-      ) : (
-        config && <p className="max-w-md border-l-4 border-line pl-3">World ID isn't set up on this pool yet, so nobody can be approved right now.</p>
+      <p className="mb-3 max-w-md">This pool only lets approved money leave privately. An approver, called an association set provider, decides which deposits are approved, and publishes that set on the chain.</p>
+      {config?.policy === "allowlist" && (
+        <p className="mb-5 max-w-md text-slate">On this pool the approver's operator approves wallets directly. Every deposit from an approved wallet is approved. Yours is <code className="break-all text-sm">{s.signer.address}</code>.</p>
       )}
+
+      {approvedAll && <p role="status" className="mb-4 border-l-4 border-pool pl-3">You're approved. You can pay privately now.</p>}
+      {statuses && unspent.length > 0 && (
+        <ul className="mb-4 max-w-md divide-y divide-line">
+          {unspent.map((n) => (
+            <li key={n.nullifierHash.toString()} className="tnum flex justify-between py-2">
+              <span>{eth(n.value)} ETH</span>
+              <span className={statuses.get(n.label.toString()) === "approved" ? "text-pool" : "text-slate"}>{STATUS_TEXT[statuses.get(n.label.toString()) ?? "unknown"]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {unspent.length === 0 && <p className="mb-4 max-w-md text-slate">You have no money in the pool yet.</p>}
       {error && <Problem>{error}</Problem>}
 
-      <h2 className="mb-2 mt-8 text-2xl font-bold">If you can't or won't verify</h2>
-      <p className="mb-2 max-w-md">Your money isn't stuck. A public exit sends it back to the wallet that added it. Everyone can see that exit, but nobody can block it.</p>
+      <h2 className="mb-2 mt-8 text-2xl font-bold">If you aren't approved</h2>
+      <p className="mb-2 max-w-md">Your money isn't stuck. A public exit sends it back to the wallet that added it. Everyone can see that exit, but nobody, the approver included, can block it.</p>
       <Button variant="quiet" className="!px-0" onClick={() => s.go("Recover")}>Go to public exit</Button>
-
-      {widget && config?.app_id && rpContext && (
-        <widget.Widget
-          open={open}
-          onOpenChange={closed}
-          app_id={config.app_id}
-          action={config.action}
-          rp_context={rpContext}
-          allow_legacy_proofs
-          preset={widget.preset}
-          environment={config.environment}
-          handleVerify={verifyOnServer}
-          onSuccess={() => { setApproved(true); s.refresh().catch(() => {}); }}
-          onError={(code: string) => {
-            settled.current = true;
-            setError((current) => current || worldErrorMessage(code));
-          }}
-        />
-      )}
     </Screen>
   );
 }

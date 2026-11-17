@@ -1,50 +1,59 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hashSignal } from "@worldcoin/idkit-core/hashing";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { privateKeyToAccount } from "viem/accounts";
-import { numberToHex, type Address } from "viem";
-import { AspError, allowMessage, createAsp, emptyState, joinMessage, type AspState } from "../src/asp.js";
-import { realWorld } from "../src/world.js";
-import { directoryQueue } from "../src/directory.js";
+import { numberToHex, type Address, type Hex } from "viem";
+import { allowlistProvider, proofMatchesRoot, rootOf } from "@relayless/sdk";
+import { AspError, allowMessage, createAsp, emptyState, type AspState } from "../src/asp.js";
+import { ASP_SALT, aspSourceOf } from "../src/chain.js";
+import { handler } from "../src/server.js";
 
 const POOL: Address = "0x00000000000000000000000000000000000000b1";
 const alice = privateKeyToAccount(numberToHex(1n, { size: 32 }));
 const bob = privateKeyToAccount(numberToHex(2n, { size: 32 }));
 const stranger = privateKeyToAccount(numberToHex(3n, { size: 32 }));
+const operator = privateKeyToAccount(numberToHex(4n, { size: 32 }));
+const SOURCE = aspSourceOf(operator.address);
 
-function setup({ verify = true, world = true, directory }: { verify?: boolean; world?: boolean; directory?: { publish(ref: { root: `0x${string}`; slot: bigint }): void } } = {}) {
+function setup() {
   const deposits = [{ depositor: alice.address, label: 11n }, { depositor: bob.address, label: 22n }, { depositor: alice.address, label: 33n }];
   const published: bigint[][] = [];
   const state: AspState = emptyState();
-  let verifyCalls = 0;
+  let saves = 0;
   const asp = createAsp({
     pool: POOL,
-    action: "join-approved-set",
-    environment: "production",
-    appId: world ? "app_test" : null,
-    world: world ? { rpContext: () => ({ rp_id: "rp", nonce: "n", created_at: 1, expires_at: 2, signature: "s" }), verify: async () => (verifyCalls++, verify) } : null,
-    chain: { deposits: async () => deposits, publish: async (labels) => (published.push(labels), { sourceId: "0x01", slot: 5n, root: "0x02" }) },
+    operator: operator.address,
+    sourceId: SOURCE,
+    chain: {
+      deposits: async () => deposits,
+      publish: async (labels) => (published.push(labels), { sourceId: SOURCE, slot: BigInt(published.length), root: numberToHex(rootOf(labels), { size: 32 }) }),
+    },
     state,
-    save: () => {},
-    directory,
+    save: () => { saves++; },
   });
-  return { asp, deposits, published, state, calls: () => verifyCalls };
+  return { asp, deposits, published, state, saves: () => saves };
 }
 
-const proof = (address: Address, nullifier = "0x10", extra: object = {}) => ({ environment: "production", responses: [{ signal_hash: hashSignal(address), nullifier, ...extra }] });
-const join = async (asp: any, who: typeof alice, result: any) => asp.join({ depositor: who.address, signature: await who.signMessage({ message: joinMessage(POOL, who.address) }), result });
+const allow = async (asp: ReturnType<typeof setup>["asp"], depositors: Address[], signer = operator) => asp.allow({ depositors, signature: await signer.signMessage({ message: allowMessage(POOL, depositors) }) });
 const refused = async (p: Promise<unknown>, code: string) => assert.rejects(p, (e: AspError) => e.code === code);
 
-test("a verified human joins, and all of that address's deposits are approved", async () => {
+test("approving an address approves all of its deposits, in one root", async () => {
   const { asp, published } = setup();
-  assert.deepEqual(await join(asp, alice, proof(alice.address)), { approved: true, labels: 2 });
+  assert.deepEqual(await allow(asp, [alice.address]), { approved: true, labels: 2 });
   assert.deepEqual(published, [[11n, 33n]]);
   assert.deepEqual((await asp.set()).labels, ["11", "33"]);
 });
 
-test("a new deposit from a member is picked up, and an unchanged set isn't republished", async () => {
+test("a batch of addresses publishes one root", async () => {
+  const { asp, published } = setup();
+  await allow(asp, [alice.address, bob.address]);
+  assert.deepEqual(published, [[11n, 22n, 33n]]);
+});
+
+test("a new deposit from an approved address is picked up, and an unchanged set isn't republished", async () => {
   const { asp, deposits, published } = setup();
-  await join(asp, alice, proof(alice.address));
+  await allow(asp, [alice.address]);
   await asp.set();
   assert.equal(published.length, 1);
   deposits.push({ depositor: alice.address, label: 44n });
@@ -52,210 +61,103 @@ test("a new deposit from a member is picked up, and an unchanged set isn't repub
   assert.equal(published.length, 2);
 });
 
+test("approving the same address twice is harmless", async () => {
+  const { asp, published, state } = setup();
+  await allow(asp, [alice.address]);
+  await allow(asp, [alice.address]);
+  assert.equal(published.length, 1);
+  assert.deepEqual(state.approved, [alice.address]);
+});
+
 test("republish keeps the root alive with the same members", async () => {
   const { asp, published } = setup();
-  await join(asp, alice, proof(alice.address));
+  await allow(asp, [alice.address]);
   await asp.republish();
   assert.equal(published.length, 2);
 });
 
-test("a proof made for another address is refused, before calling World", async () => {
-  const { asp, calls } = setup();
-  await refused(join(asp, bob, proof(alice.address)), "signal_mismatch");
-  assert.equal(calls(), 0);
+test("an address with no deposit can be approved, and appears once it deposits", async () => {
+  const { asp, deposits, published } = setup();
+  await allow(asp, [stranger.address]);
+  assert.equal(published.length, 0);
+  deposits.push({ depositor: stranger.address, label: 55n });
+  assert.deepEqual((await asp.set()).labels, ["55"]);
 });
 
-test("a proof with no signal hash fails closed", async () => {
-  const { asp } = setup();
-  await refused(join(asp, alice, { environment: "production", responses: [{ nullifier: "0x10" }] }), "signal_mismatch");
-});
-
-test("one human can't approve a second address, even writing the nullifier differently", async () => {
-  const { asp } = setup();
-  await join(asp, alice, proof(alice.address, "0x10"));
-  await refused(join(asp, bob, proof(bob.address, "16")), "already_used");
-});
-
-test("two simultaneous joins with one nullifier: only one succeeds", async () => {
-  const { asp, state } = setup();
-  const results = await Promise.allSettled([join(asp, alice, proof(alice.address)), join(asp, bob, proof(bob.address))]);
-  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
-  assert.equal(Object.keys(state.members).length, 1);
-});
-
-test("joining again with the same human and address is harmless", async () => {
+test("only the operator can approve", async () => {
   const { asp, published } = setup();
-  await join(asp, alice, proof(alice.address));
-  await join(asp, alice, proof(alice.address));
-  assert.equal(published.length, 1);
-});
-
-test("World rejecting the proof approves nothing", async () => {
-  const { asp, state, published } = setup({ verify: false });
-  await refused(join(asp, alice, proof(alice.address)), "verification_failed");
-  assert.deepEqual(state.members, {});
+  await refused(allow(asp, [alice.address], alice), "bad_signature");
+  await refused(allow(asp, [alice.address], stranger), "bad_signature");
   assert.equal(published.length, 0);
 });
 
-test("the wrong environment is refused, so staging proofs can't pass in production", async () => {
-  const { asp, calls } = setup();
-  await refused(join(asp, alice, { ...proof(alice.address), environment: "staging" }), "wrong_environment");
-  assert.equal(calls(), 0);
+test("a signature for one list can't approve another", async () => {
+  const { asp } = setup();
+  const signature = await operator.signMessage({ message: allowMessage(POOL, [alice.address]) });
+  await refused(asp.allow({ depositors: [bob.address], signature }), "bad_signature");
+  await refused(asp.allow({ depositors: [alice.address, bob.address], signature }), "bad_signature");
 });
 
-test("a signature from someone else is refused", async () => {
+test("a signature for another pool can't approve on this one", async () => {
   const { asp } = setup();
-  const signature = await bob.signMessage({ message: joinMessage(POOL, alice.address) });
-  await refused(asp.join({ depositor: alice.address, signature, result: proof(alice.address) }), "bad_signature");
-});
-
-test("an address with no deposit is ineligible", async () => {
-  const { asp } = setup();
-  await refused(join(asp, stranger, proof(stranger.address)), "no_deposit");
+  const signature = await operator.signMessage({ message: allowMessage("0x00000000000000000000000000000000000000b2", [alice.address]) });
+  await refused(asp.allow({ depositors: [alice.address], signature }), "bad_signature");
 });
 
 test("malformed requests are refused", async () => {
   const { asp } = setup();
-  await refused(asp.join({}), "bad_request");
-  await refused(join(asp, alice, { environment: "production", responses: [] }), "bad_request");
-  await refused(join(asp, alice, { environment: "production", responses: [{ signal_hash: hashSignal(alice.address) }] }), "bad_request");
+  await refused(asp.allow({}), "bad_request");
+  await refused(asp.allow({ depositors: [], signature: "0x01" }), "bad_request");
+  await refused(asp.allow({ depositors: ["not an address"], signature: "0x01" }), "bad_request");
+  await refused(asp.allow({ depositors: [alice.address] }), "bad_request");
 });
 
-test("with no World ID configured, joining answers clearly and the rest still works", async () => {
-  const { asp } = setup({ world: false });
-  assert.equal(asp.config().enabled, false);
-  await refused(join(asp, alice, proof(alice.address)), "world_not_configured");
-  assert.throws(() => asp.rpContext(), (e: AspError) => e.code === "world_not_configured");
-  assert.deepEqual((await asp.set()).labels, []);
-});
-
-test("the public config never contains the signing key", () => {
+test("before anything is approved, the set is empty and has no root", async () => {
   const { asp } = setup();
-  assert.deepEqual(Object.keys(asp.config()).sort(), ["action", "app_id", "enabled", "environment"]);
+  assert.deepEqual(await asp.set(), { sourceId: SOURCE, labels: [], ref: null });
 });
 
-test("real client: posts to World's v4 endpoint and requires success in the right environment", async () => {
-  const seen: { url: string; body: any }[] = [];
-  const answer = (body: object, ok = true) => (async (url: string, init: any) => (seen.push({ url, body: JSON.parse(init.body) }), { ok, json: async () => body })) as any;
-  const cfg = { rpId: "rp_abc", signingKey: "0x" + "11".repeat(32), action: "a", environment: "production" };
-  assert.equal(await realWorld(cfg, answer({ success: true, environment: "production" })).verify({ x: 1 }), true);
-  assert.equal(seen[0].url, "https://developer.world.org/api/v4/verify/rp_abc");
-  assert.equal(seen[0].body.x, 1);
-  assert.equal(await realWorld(cfg, answer({ success: true, environment: "staging" })).verify({}), false);
-  assert.equal(await realWorld(cfg, answer({ success: false, environment: "production" })).verify({}), false);
-  assert.equal(await realWorld(cfg, answer({}, false)).verify({}), false);
+test("the public config names the policy, operator and source, and nothing secret", () => {
+  const { asp } = setup();
+  assert.deepEqual(asp.config(), { policy: "allowlist", pool: POOL, operator: operator.address, sourceId: SOURCE });
 });
 
-test("real client: signs an rp_context locally", () => {
-  const c = realWorld({ rpId: "rp_abc", signingKey: "0x" + "11".repeat(32), action: "a", environment: "production" }).rpContext();
-  assert.equal(c.rp_id, "rp_abc");
-  assert.ok(c.signature && c.nonce && c.expires_at > c.created_at);
+test("the source id is keccak256(writer || salt), as the recent-root predeploy derives it", async () => {
+  const { keccak256, concat } = await import("viem");
+  assert.equal(SOURCE, keccak256(concat([operator.address, ASP_SALT])));
 });
 
-// ---- Publishing to ENS ----
-
-const ref = (n: number) => ({ root: `0x${String(n).padStart(64, "0")}` as `0x${string}`, slot: BigInt(n) });
-
-test("an approved set is told to the directory once the chain has it, and an unchanged set isn't", async () => {
-  const told: unknown[] = [];
-  const { asp } = setup({ directory: { publish: (r) => told.push(r) } });
-  await join(asp, alice, proof(alice.address));
-  assert.deepEqual(told, [{ root: "0x02", slot: 5n }]);
-  await asp.set();
-  assert.equal(told.length, 1);
+test("over HTTP, the SDK's reference provider reads this server and builds a proof that reaches its root", async () => {
+  const { asp } = setup();
+  await allow(asp, [alice.address]);
+  const server = createServer(handler(asp, undefined));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  try {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const provider = allowlistProvider(url);
+    assert.equal(await provider.sourceId(), SOURCE);
+    const proof = await provider.membershipProof(33n);
+    assert.ok(proof && proofMatchesRoot(33n, proof));
+    assert.equal(await provider.status(33n), "approved");
+    assert.equal(await provider.status(22n), "unknown");
+    assert.equal(await provider.membershipProof(22n), null);
+    const gone = await fetch(`${url}/join`, { method: "POST", body: "{}" });
+    assert.equal(gone.status, 404);
+  } finally {
+    server.close();
+  }
 });
 
-test("the recent-root refresh also reaches the directory, because an old slot can no longer be checked", async () => {
-  const told: unknown[] = [];
-  const { asp } = setup({ directory: { publish: (r) => told.push(r) } });
-  await join(asp, alice, proof(alice.address));
-  await asp.republish();
-  assert.equal(told.length, 2);
-});
-
-test("a Sepolia outage doesn't touch joining: it still approves, and the error is only logged", async () => {
-  const errors: unknown[] = [];
-  const directory = directoryQueue(async () => { throw new Error("sepolia is down"); }, (e) => errors.push(e));
-  const { asp } = setup({ directory });
-  assert.deepEqual(await join(asp, alice, proof(alice.address)), { approved: true, labels: 2 });
-  await directory.settled();
-  assert.equal(errors.length, 1);
-});
-
-test("a slow Sepolia doesn't hold up joining", async () => {
-  let release = () => {};
-  const directory = directoryQueue(() => new Promise<void>((r) => { release = r; }), () => {});
-  const { asp } = setup({ directory });
-  assert.deepEqual(await join(asp, alice, proof(alice.address)), { approved: true, labels: 2 });
-  release();
-  await directory.settled();
-});
-
-test("directory queue: one at a time, and only the newest of a burst goes out", async () => {
-  const sent: bigint[] = [];
-  const gates: (() => void)[] = [];
-  const q = directoryQueue((r) => new Promise<void>((res) => { sent.push(r.slot); gates.push(res); }), () => {});
-  q.publish(ref(1));
-  q.publish(ref(2));
-  q.publish(ref(3));
-  assert.deepEqual(sent, [1n]);
-  gates[0]();
-  await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(sent, [1n, 3n]);
-  gates[1]();
-  await q.settled();
-  assert.deepEqual(sent, [1n, 3n]);
-});
-
-test("directory queue: keeps working after a failure", async () => {
-  const sent: bigint[] = [];
-  let fail = true;
-  const q = directoryQueue(async (r) => {
-    if (fail) { fail = false; throw new Error("once"); }
-    sent.push(r.slot);
-  }, () => {});
-  q.publish(ref(1));
-  await q.settled();
-  q.publish(ref(2));
-  await q.settled();
-  assert.deepEqual(sent, [2n]);
-});
-
-function allowlistSetup(operator: Address | undefined) {
-  const published: bigint[][] = [];
-  const asp = createAsp({
-    pool: POOL,
-    action: "a",
-    environment: "production",
-    appId: null,
-    world: null,
-    allowlistOperator: operator,
-    chain: { deposits: async () => [{ depositor: alice.address, label: 11n }, { depositor: bob.address, label: 22n }, { depositor: stranger.address, label: 33n }], publish: async (labels) => (published.push(labels), { sourceId: "0x01", slot: 5n, root: "0x02" }) },
-    state: emptyState(),
-    save: () => {},
-  });
-  return { asp, published };
-}
-
-test("a World ID server has no allowlist path", async () => {
-  const { asp } = allowlistSetup(undefined);
-  const depositors = [alice.address];
-  await refused(asp.allow({ depositors, signature: await stranger.signMessage({ message: allowMessage(POOL, depositors) }) }), "not_found");
-  assert.equal("allowlist" in asp.config(), false);
-});
-
-test("only the operator can allow, and a batch publishes one root", async () => {
-  const { asp, published } = allowlistSetup(stranger.address);
-  const depositors = [alice.address, bob.address];
-  await refused(asp.allow({ depositors, signature: await alice.signMessage({ message: allowMessage(POOL, depositors) }) }), "bad_signature");
-  assert.equal(published.length, 0);
-  await asp.allow({ depositors, signature: await stranger.signMessage({ message: allowMessage(POOL, depositors) }) });
-  assert.deepEqual(published, [[11n, 22n]]);
-  assert.equal("allowlist" in asp.config(), true);
-});
-
-test("a signature for one list can't approve another", async () => {
-  const { asp } = allowlistSetup(stranger.address);
-  const signature = await stranger.signMessage({ message: allowMessage(POOL, [alice.address]) });
-  await refused(asp.allow({ depositors: [bob.address], signature }), "bad_signature");
+test("over HTTP, a bad body is refused without approving anything", async () => {
+  const { asp, published } = setup();
+  const server = createServer(handler(asp, undefined));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  try {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const res = await fetch(`${url}/allow`, { method: "POST", body: "{not json" });
+    assert.equal(res.status, 400);
+    assert.equal(published.length, 0);
+  } finally {
+    server.close();
+  }
 });

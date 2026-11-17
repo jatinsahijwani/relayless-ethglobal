@@ -1,12 +1,15 @@
 // Compliance path, locally: only labels in the association set can withdraw privately; anyone else can still exit publicly.
-// The ASP here is a plain local key. World ID and the ENS name are what would sit in front of it.
+// The ASP here is a plain local key behind the SDK's AssociationSetProvider interface, as any third-party ASP would be.
 import { concat, keccak256, numberToHex, parseEther, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { NotApprovedError, Relayless, fileProver, rootOf } from "@relayless/sdk";
+import { NotAdmittedError, NotApprovedError, Relayless, checkRecentRoot, profileOf, fileProver, publishedSetProvider, rootOf, siblings, type AssociationSetProvider } from "@relayless/sdk";
 import { CIRCUITS, balanceOf, fundedKey, loadConfig, localSigner, mined, rpc, stopWorkers } from "./lib.js";
 
 const SALT = keccak256(toHex("relayless.asp"));
-const cfg = loadConfig("local-asp");
+// usage: tsx scripts/e2e-asp.ts [network], default local-asp. The network's config names its spec profile.
+const cfg = loadConfig(process.argv[2] ?? "local-asp");
+const RECENT_ROOT = profileOf(cfg.profile).recentRoot;
+const RECENT_ROOT_FRAME = profileOf(cfg.profile).rootCarrier === "frame";
 const deployerKey = process.env.DEPLOYER_KEY as Hex;
 const aspKey = process.env.ASP_KEY as Hex;
 const asp = privateKeyToAccount(aspKey);
@@ -18,16 +21,17 @@ const check = (name: string, ok: boolean, detail = "") => {
 
 let approved: bigint[] = [];
 let ref: { sourceId: Hex; slot: bigint; root: Hex } | null = null;
-const provider = { load: async () => ({ labels: approved, ref: ref! }) };
+const SOURCE = keccak256(concat([asp.address, SALT]));
+const provider: AssociationSetProvider = publishedSetProvider(async () => ({ sourceId: SOURCE, labels: approved, ref }));
 
 async function publish(labels: bigint[]) {
   approved = labels;
   const root = numberToHex(rootOf(labels), { size: 32 });
   const nonce = Number(await rpc(cfg.rpc, "eth_getTransactionCount", [asp.address, "pending"]));
-  const raw = await asp.signTransaction({ chainId: cfg.chainId, nonce, to: "0x0000000000000000000000000000000000008272", data: concat([SALT, root]), gas: 400_000n, gasPrice: 2_000_000_000n, type: "legacy" });
+  const raw = await asp.signTransaction({ chainId: cfg.chainId, nonce, to: RECENT_ROOT, data: concat([SALT, root]), gas: 400_000n, gasPrice: 2_000_000_000n, type: "legacy" });
   const r = await mined(cfg, await rpc<Hex>(cfg.rpc, "eth_sendRawTransaction", [raw]));
   const block = await rpc(cfg.rpc, "eth_getBlockByNumber", [r.blockNumber, false]);
-  ref = { sourceId: keccak256(concat([asp.address, SALT])), slot: BigInt(block.slotNumber), root };
+  ref = { sourceId: SOURCE, slot: BigInt(block.slotNumber), root };
   for (;;) {
     const head = await rpc(cfg.rpc, "eth_getBlockByNumber", ["latest", false]);
     if (BigInt(head.slotNumber) > ref.slot) break;
@@ -35,7 +39,7 @@ async function publish(labels: bigint[]) {
   }
 }
 
-const connect = (key: Hex) => Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, asp: provider });
+const connect = (key: Hex, p: AssociationSetProvider = provider) => Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, profile: cfg.profile, pool: cfg.pool as Address, signer: localSigner(cfg, key), prover: fileProver(CIRCUITS), chainId: cfg.chainId, asp: p });
 const aliceKey = await fundedKey(cfg, deployerKey, "alice", parseEther("1"));
 const bobKey = await fundedKey(cfg, deployerKey, "bob", parseEther("1"));
 const alice = await connect(aliceKey);
@@ -45,11 +49,12 @@ await mined(cfg, (await bob.deposit({ amount: parseEther("0.2") })).hash);
 const aliceNote = (await alice.notes())[0];
 const bobNote = (await bob.notes())[0];
 await publish([aliceNote.label]);
+check("the provider's source is the one the pool accepts, and its root is on the chain", (await provider.sourceId()) === cfg.aspSourceId && (await checkRecentRoot(cfg.rpc, (await provider.currentRoot())!, RECENT_ROOT)).status === "verified");
 
 const to = alice.freshAddress(0);
 const h = await alice.withdraw({ to, amount: parseEther("0.05") });
 const r = await h.wait();
-check("a note in the approved set withdraws privately, with two root references", r?.status === "0x1" && (await balanceOf(cfg, to)) > parseEther("0.049"), `verify gas ${Number(r.frameReceipts[0].gasUsed)}`);
+check("a note in the approved set withdraws privately, with two root references", r?.status === "0x1" && (await balanceOf(cfg, to)) > parseEther("0.049"), RECENT_ROOT_FRAME ? `root frame ${Number(r.frameReceipts[0].gasUsed)} gas, verify ${Number(r.frameReceipts[1].gasUsed)}` : `verify gas ${Number(r.frameReceipts[0].gasUsed)}`);
 
 const changeNote = (await alice.notes()).find((n) => !n.spent)!;
 const h2 = await alice.withdraw({ to: alice.freshAddress(1), amount: parseEther("0.05"), note: changeNote });
@@ -59,12 +64,24 @@ let refused: unknown = null;
 await bob.withdraw({ to: bob.freshAddress(0), amount: parseEther("0.05") }).catch((e) => (refused = e));
 check("a note outside the set can't withdraw privately", refused instanceof NotApprovedError);
 
-// Lying about membership: claim Alice's slot in the set with Bob's label. The circuit must refuse.
-let forged = "";
-const forgingProvider = { load: async () => ({ labels: [bobNote.label], ref: ref! }) };
-const forger = await Relayless.connect({ rpc: cfg.rpc, mempool: cfg.mempool, pool: cfg.pool as Address, signer: localSigner(cfg, bobKey), prover: fileProver(CIRCUITS), chainId: cfg.chainId, asp: forgingProvider });
-await forger.withdraw({ to: bob.freshAddress(0), amount: parseEther("0.05") }).then(() => (forged = "SENT"), (e) => (forged = e.message));
-check("faking membership can't produce a proof", forged !== "SENT" && /Assert Failed|Error in template|simulation failed/i.test(forged), forged.slice(0, 70));
+// Lying about membership, three ways. None may reach the mempool.
+const outcome = (p: Promise<unknown>) => p.then(() => "SENT", (e) => e);
+
+// 1. A proof that doesn't reach the provider's own root: the SDK refuses before proving.
+const inconsistent: AssociationSetProvider = { ...provider, membershipProof: async (label) => ({ ref: ref!, index: 0, siblings: siblings([label], 0) }) };
+const r1 = await outcome((await connect(bobKey, inconsistent)).withdraw({ to: bob.freshAddress(0), amount: parseEther("0.05") }));
+check("a membership proof that doesn't reach its root is refused before proving", r1 !== "SENT" && /doesn't match its root/.test(r1.message), r1.message?.slice(0, 70));
+
+// 2. A self-consistent proof against a root the ASP never published: only the chain can catch this, and it does.
+const fakeRoot = numberToHex(rootOf([bobNote.label]), { size: 32 });
+const lying: AssociationSetProvider = { ...provider, membershipProof: async (label) => ({ ref: { ...ref!, root: fakeRoot }, index: 0, siblings: siblings([label], 0) }) };
+const r2 = await outcome((await connect(bobKey, lying)).withdraw({ to: bob.freshAddress(0), amount: parseEther("0.05") }));
+check("a proof against a root the ASP never published is refused by the chain's root check, and not broadcast", r2 instanceof NotAdmittedError && /simulation failed/.test(r2.message), r2.message?.slice(0, 70));
+
+// 3. A provider that writes under another source: the pool wouldn't accept its roots, so the SDK refuses at once.
+const other: AssociationSetProvider = { ...provider, sourceId: async () => keccak256(toHex("someone else")) };
+const r3 = await outcome((await connect(bobKey, other)).withdraw({ to: bob.freshAddress(0), amount: parseEther("0.05") }));
+check("a provider for another source is refused before proving", r3 !== "SENT" && /only accepts/.test(r3.message), r3.message?.slice(0, 70));
 
 const depositor = localSigner(cfg, bobKey).address;
 const before = await balanceOf(cfg, depositor);

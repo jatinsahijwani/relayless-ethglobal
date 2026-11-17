@@ -1,6 +1,5 @@
 // usage: RELAYLESS_NETWORK=local-asp pnpm --filter @relayless/asp start
-// Reads ../../.env. World ID stays off until WORLD_APP_ID, WORLD_RP_ID and WORLD_SIGNING_KEY are set; the set and the
-// public exit still work, and joining answers 503.
+// Reads ../../.env. ASP_KEY both signs approvals and writes the set's root, so the pool must name its source.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -8,9 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { AspError, createAsp, emptyState, type AspState } from "./asp.js";
-import { liveChain } from "./chain.js";
-import { directoryQueue, liveDirectory } from "./directory.js";
-import { realWorld } from "./world.js";
+import { aspSourceOf, liveChain } from "./chain.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 if (existsSync(join(root, ".env"))) {
@@ -53,8 +50,6 @@ export function handler(asp: ReturnType<typeof createAsp>, allowedOrigin: string
       if (req.method === "OPTIONS") return send(204, {});
       if (route === "GET /config") return send(200, asp.config());
       if (route === "GET /set") return send(200, await asp.set());
-      if (route === "POST /rp-context") return send(200, asp.rpContext());
-      if (route === "POST /join") return send(200, await asp.join(await readBody(req)));
       if (route === "POST /allow") return send(200, await asp.allow(await readBody(req)));
       return send(404, { error: "not_found", message: "No such route." });
     } catch (e) {
@@ -69,25 +64,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const network = process.env.RELAYLESS_NETWORK ?? "local-asp";
   const cfg = JSON.parse(readFileSync(join(root, `config/${network}.deployed.json`), "utf8"));
   if (!process.env.ASP_KEY) throw new Error("set ASP_KEY");
-  const statePath = join(root, `.relayless/asp-${network}.json`);
+  // Approvals belong to one pool, so a redeployed pool starts clean instead of inheriting another pool's state.
+  const statePath = join(root, `.relayless/asp-${network}-${String(cfg.pool).toLowerCase()}.json`);
   const state: AspState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : emptyState();
-  const { WORLD_APP_ID, WORLD_RP_ID, WORLD_SIGNING_KEY } = process.env;
-  const action = process.env.WORLD_ACTION ?? "join-approved-set";
-  const environment = process.env.WORLD_ENVIRONMENT ?? "production";
-  const world = WORLD_APP_ID && WORLD_RP_ID && WORLD_SIGNING_KEY ? realWorld({ rpId: WORLD_RP_ID, signingKey: WORLD_SIGNING_KEY, action, environment }) : null;
-  // Off unless this ASP has a name in the directory. The approved set works the same either way.
-  const ensLabel = process.env.ASP_ENS_LABEL;
-  const directory = ensLabel ? directoryQueue(liveDirectory(JSON.parse(readFileSync(join(root, "config/ens.sepolia.json"), "utf8")), ensLabel, process.env.ASP_KEY as Hex), (e) => console.error("publishing to ENS failed; the approved set isn't affected", e)) : undefined;
-  // Catches up after a restart, or a publish that failed. Costs nothing if ENS already has this root.
-  if (directory && state.ref) directory.publish({ root: state.ref.root, slot: BigInt(state.ref.slot) });
+  if (!Array.isArray(state.approved)) throw new Error(`${statePath} is from an older ASP version: move it aside and approve again`);
+  const operator = privateKeyToAccount(process.env.ASP_KEY as Hex).address;
+  const sourceId = aspSourceOf(operator);
+  if (cfg.aspSourceId && cfg.aspSourceId.toLowerCase() !== sourceId.toLowerCase()) throw new Error(`the pool accepts roots from ${cfg.aspSourceId}, and ASP_KEY writes them as ${sourceId}`);
   const asp = createAsp({
-    directory,
     pool: cfg.pool,
-    action,
-    environment,
-    appId: WORLD_APP_ID ?? null,
-    world,
-    allowlistOperator: process.env.ASP_ALLOWLIST === "1" ? privateKeyToAccount(process.env.ASP_KEY as Hex).address : undefined,
+    operator,
+    sourceId,
     chain: liveChain(cfg, process.env.ASP_KEY as Hex),
     state,
     save(s) {
@@ -99,5 +86,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (state.ref) asp.republish().catch((e) => console.error("republish failed", e));
   setInterval(() => asp.republish().catch((e) => console.error("republish failed", e)), REPUBLISH_MS);
   const port = Number(process.env.ASP_PORT ?? 8790);
-  createServer(handler(asp, process.env.ASP_ALLOWED_ORIGIN)).listen(port, "127.0.0.1", () => console.log(`ASP on http://127.0.0.1:${port}, World ID ${world ? `on (${environment})` : "off: WORLD_* not set"}`));
+  createServer(handler(asp, process.env.ASP_ALLOWED_ORIGIN)).listen(port, "127.0.0.1", () => console.log(`allowlist ASP on http://127.0.0.1:${port}, operator ${operator}, source ${sourceId}`));
 }

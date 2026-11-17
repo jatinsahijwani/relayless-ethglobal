@@ -1,5 +1,7 @@
 // Deploys the Poseidon libraries, the validator and the pool, then writes config/<network>.deployed.json.
 // usage: DEPLOYER_KEY=0x... tsx scripts/deploy.ts <network>
+// config/<network>.json names the spec profile (`profile`, default devnet-8421), which picks the validator build. A
+// network with no alt mempool has no `stakingRegistry`: the pool then stakes nothing.
 import { readFileSync, writeFileSync } from "node:fs";
 import { encodeDeployData, parseEther, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -37,7 +39,10 @@ const deployed = async (label: string, bytecode: Hex, value = 0n): Promise<Addre
 
 const t3 = await deployed("PoseidonT3", art("PoseidonT3.sol/PoseidonT3.json").bytecode.object);
 const t4 = await deployed("PoseidonT4", art("PoseidonT4.sol/PoseidonT4.json").bytecode.object);
-const validator = await deployed("Validator", JSON.parse(readFileSync("packages/contracts/generated/validator.json", "utf8")).bytecode);
+const profile: string = cfg.profile ?? "devnet-8421";
+const built = JSON.parse(readFileSync(`packages/contracts/generated/validator.${profile}.json`, "utf8"));
+if (built.profile !== profile) throw new Error(`validator build is for ${built.profile}, not ${profile}: run pnpm build:contracts`);
+const validator = await deployed(`Validator (${profile})`, built.bytecode);
 
 const poolArt = art("RelaylessPool.sol/RelaylessPool.json");
 let code: string = poolArt.bytecode.object.slice(2);
@@ -51,11 +56,11 @@ for (const [file, libs] of Object.entries(refs)) {
 }
 // An association-set pool names its ASP's root source in the constructor.
 if (process.env.ASP_SOURCE_ID) cfg.aspSourceId = process.env.ASP_SOURCE_ID;
-const stake = parseEther(cfg.stakeEth);
+const registry: Address = cfg.stakingRegistry ?? "0x0000000000000000000000000000000000000000";
+const stake = cfg.stakingRegistry ? parseEther(cfg.stakeEth) : 0n;
 const reserve = parseEther(cfg.reserveEth);
-const data = encodeDeployData({ abi: poolArt.abi, bytecode: `0x${code}` as Hex, args: [validator, cfg.stakingRegistry, stake, cfg.unstakeDelaySec, cfg.aspSourceId ?? `0x${"00".repeat(32)}`] });
+const data = encodeDeployData({ abi: poolArt.abi, bytecode: `0x${code}` as Hex, args: [validator, registry, stake, cfg.unstakeDelaySec ?? 0, cfg.aspSourceId ?? `0x${"00".repeat(32)}`, built.recentRoot] });
 const pool = await deployed("RelaylessPool", data, stake + reserve);
 
-const { feeRange } = JSON.parse(readFileSync("packages/contracts/generated/validator.json", "utf8"));
-writeFileSync(`config/${network}.deployed.json`, JSON.stringify({ ...cfg, pool, validator, poseidonT3: t3, poseidonT4: t4, feeRange }, null, 2));
+writeFileSync(`config/${network}.deployed.json`, JSON.stringify({ ...cfg, profile, pool, validator, poseidonT3: t3, poseidonT4: t4, feeRange: built.feeRange }, null, 2));
 console.log(`written config/${network}.deployed.json`);

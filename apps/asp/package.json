@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@relayless/sdk": "workspace:*",
-    "@worldcoin/idkit-core": "4.6.0",
     "viem": "^2.57.7"
   },
-  "devDependencies": { "tsx": "^4.19.0", "typescript": "^5.6.0", "@types/node": "^22.0.0" }
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
 }

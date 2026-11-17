@@ -22,18 +22,12 @@ The pool's label scheme and public-exit design also follow theirs.
 - **poseidon-solidity**, **poseidon-lite** (MIT): Poseidon hashing.
 - **snarkjs** (GPL-3.0): the prover, used as a runtime dependency. Its own GPL-3.0 dependencies stay packages too: **ffjavascript**, **fastfile**, **r1csfile**, **wasmcurves**, **wasmbuilder**, **@iden3/binfileutils** and **@iden3/bigarray**.
 - **viem** (MIT).
-- **@scopelift/stealth-address-sdk** (MIT): ERC-5564 scheme 1 derivation, checking and key recovery. Only its crypto functions are imported, and it's used as a dependency, not copied.
-- **@noble/secp256k1**, **@noble/hashes** (MIT): curve operations and key derivation.
-- **@nymproject/mix-fetch**, **@nymproject/mix-tunnel** (Apache-2.0): the optional mixnet route, used as dependencies and loaded only when it's turned on.
+- **@noble/hashes** (MIT): key derivation.
 
 ## GPL code in this repository
 No GPL source is copied in. `circomlib` and `snarkjs` are installed as packages, circuits include `circomlib` from `node_modules` at build time, and the on-chain verifier is hand-written Yul rather than the snarkjs Solidity template.
 
 `packages/circuits/build/` holds generated files: the compiled circuits (which contain `circomlib` templates), proving and verifying keys, and the witness helpers circom emits. They are build outputs, committed so a fresh clone skips the trusted setup, and they're distributed under this project's GPL-3.0.
-
-## Standards and interfaces
-- `packages/ens/src/ERC5564Announcer.sol` implements the interface from [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) (CC0).
-- `packages/ens` declares minimal interfaces for ENS [contracts-v2](https://github.com/ensdomains/contracts-v2) (MIT) and calls the contracts deployed on Sepolia. No ENS code is copied.
 
 ## Changes to third-party software
 `patches/sidecar-budget-010.patch` modifies `forshtat/mempool-workshop-sidecar` (MIT). It isn't part of this project's own code.

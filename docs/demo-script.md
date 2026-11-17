@@ -1,8 +1,8 @@
 # Demo script (3 minutes)
 
-This is the spoken script for showing a judge in person. For the recorded video, use [video-shotlist.md](video-shotlist.md).
+This is the spoken script for showing Relayless in person. It runs on the local stack: say so out loud (see "Be accurate").
 
-It runs on the local stack, which the alt mempool authors confirmed is fine for judging. Say so out loud (see "Be accurate").
+The hackathon version, with World ID, ENS and Nym segments, is in the tag `v1.0-ethglobal-mumbai`.
 
 Before you start: run `pnpm demo:reset` and then `pnpm demo:prep`, which must be all green. Open http://127.0.0.1:5199/?demo=1.
 
@@ -46,27 +46,8 @@ Before you start: run `pnpm demo:reset` and then `pnpm demo:prep`, which must be
 ## Be accurate on camera
 - **Say it's the local stack:** "This runs on a local devnet with a small sidecar patch, because the public gateway doesn't yet allow verification over 100k."
 - Don't say "anonymous" without "the model estimates". The node you submit to sees your IP.
-- World ID works on **staging** with the simulator. Production and a real World App aren't tested. The demo wallet is approved by the allowlist ASP's operator, not World ID.
-- ENSv2 is live on Sepolia. The pool is on the local devnet.
+- The demo wallet is approved by the reference allowlist ASP's operator. Any association set provider plugs in the same way (`docs/association-sets.md`).
 - The dots are seed data. Say so if asked, and it's labelled in the README.
-- Nym covers ENS reads only. The RPC still sees the names looked up, but not your IP. Transactions still go directly to the mempool node.
-
-## ENS segment (30 s)
-Before you start: the local app is on the **ENS** tab with a test wallet that has private money, `alice.relayless.eth` is claimed, and the recipient's wallet is ready to scan.
-
-*Show **ASPs**. Point at the green check on `world.asp.relayless.eth`, then the warning on `forged-demo`.* (10 s)
-
-> "These are privacy pool approvers, found by name. There's no list in the app: it reads ENSv2 subnames. Each root is checked against the pool's own chain, so this one passes, and this deliberately wrong one gets a warning. The operator's key can edit only this root and policy. Not even the parent name can change them."
-
-*Go to **Names**. Look up `alice.relayless.eth`. Pay it. Pay it again. Two different addresses appear.* (12 s, cut the waiting)
-
-> "Pay a name, not an address. The name holds a stealth record, so each payment goes to a new one-time address, paid from the pool. Same name, two addresses, and nothing on-chain connects them."
-
-*Switch to the recipient's wallet. Click **Find my payments**. Both appear.* (8 s)
-
-> "Only Alice's viewing key can find them. Her scan fetches every announcement, so even the node can't tell which are hers."
-
-If you're showing the public link instead, say that payments run on the local devnet: the page says so too.
 
 ## If something fails live
 Stay calm and name what failed. Nothing here needs a chain restart, and **don't restart the chain**: a new one takes about 13 minutes and has to get past its block-number hole.
@@ -78,19 +59,6 @@ Stay calm and name what failed. Nothing here needs a chain restart, and **don't 
 | A note has no root yet | "not yet referenceable" | Wait 10 s and try again. The SDK retries before broadcasting |
 | The block is slow | Stuck on "Waiting for a block" | Keep talking: slots are 6 s, and it's usually a few. If it passes a minute, run `pnpm demo:prep` to see what's red |
 | "This mempool node is limiting the pool" | Pool throttled or banned | Don't retry. Use the backup video. `seen` decays over 24 hours, and `demo:prep` shows the numbers |
-| Sidecar or web app down | Connection errors | `pnpm demo:prep` prints what to run for each. `pnpm demo:asp` and `RELAYLESS_NETWORK=local-asp2 pnpm web` are safe to restart |
-| **Nym won't connect** | "Try a new connection" or "Turn off Nym" | Click **Turn off Nym and connect directly**. It says so on screen and never goes direct by itself. Say: "4 of 6 test runs connected. When it fails, it stops and asks." |
-| The Sepolia RPC rate-limits | ASPs load slowly | Reads back off and fall through to a second RPC, so wait. Otherwise show the explorer links below |
-| The live page won't load | | Show the explorer links below, and the same screens in the local app's **ENS** tab |
-
-**Explorer links to show instead**
-
-All on Sepolia, and they stay up without anything of ours running:
-- [`relayless.eth` registry](https://sepolia.etherscan.io/address/0xa30168D50Dfa55C2bCe1ed726F86eAFeA3Af87F2)
-- [`asp.relayless.eth` directory](https://sepolia.etherscan.io/address/0x1511b0aF97942f939b4F7369b016fAc70ee6033F)
-- [World ID ASP's resolver](https://sepolia.etherscan.io/address/0x335dd5348EbEA119DB2644831801C290ECF0B4e7)
-- [Allowlist ASP's resolver](https://sepolia.etherscan.io/address/0x891eE68599a0fCcFF956Ee07eB14417255c0B27E)
-- [Name claimer](https://sepolia.etherscan.io/address/0x0a1f421cd39dd9015483d6c16aec6ffc819cd85b)
-- [An ASP root published by itself](https://sepolia.etherscan.io/tx/0x5320d9afd562ba5713c9cfe174d00b290e2637234008596ada4e31e6f34a071a)
+| Sidecar or web app down | Connection errors | `pnpm demo:prep` prints what to run for each. `pnpm demo:asp` and `RELAYLESS_NETWORK=local-asp pnpm web` are safe to restart |
 
 The withdrawals themselves are on a private chain, so they have no public link. The public devnet's [explorer](https://explorer.altmempool.wtf/) shows the Phase 0 contract-sender transaction: `0x6f39d1fe8c3828025fe8f21baf3ac012acedc6a2d7b87371eae9f54d62ccef99`. Its history is in memory, so it can disappear.

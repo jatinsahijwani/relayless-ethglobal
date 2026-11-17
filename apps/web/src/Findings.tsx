@@ -1,16 +1,6 @@
-import qr from "../../../docs/img/live-qr.svg";
-
 const REPO = "https://github.com/jatinsahijwani/relayless-ethglobal/blob/main";
-export const LIVE_URL = "https://relayless-ens.vercel.app";
 
 const Doc = ({ path, children }: { path: string; children: string }) => <a className="font-bold text-pool underline underline-offset-4" href={`${REPO}/${path}`}>{children}</a>;
-
-export const LiveQr = ({ className = "" }: { className?: string }) => (
-  <figure className={`flex items-center gap-3 ${className}`}>
-    <img src={qr} alt={`QR code for ${LIVE_URL}`} width={104} height={104} className="rounded-lg" />
-    <figcaption className="max-w-44 text-sm text-slate">Scan to try the ENS directory and private names on your phone.</figcaption>
-  </figure>
-);
 
 /** What building a shared-sender privacy pool found out about the alt mempool. Every claim links to its repro. */
 export function Findings() {
@@ -50,8 +40,7 @@ export function Findings() {
         <p className="mt-2 max-w-2xl text-slate">One limit: this is about correctness, not cost. Gas doesn't price CPU evenly, so a node should set its budget with that in mind.</p>
       </section>
 
-      <LiveQr />
-      <p className="mt-3 text-sm text-slate">Runs on a local devnet with a patched sidecar, which the alt mempool authors confirmed is fine for judging. Not audited.</p>
+      <p className="mt-3 text-sm text-slate">Runs on a local devnet with a patched sidecar. Not audited.</p>
     </main>
   );
 }
