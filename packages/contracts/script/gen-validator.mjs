@@ -24,7 +24,8 @@ export const WITHDRAW_SIG = "withdraw(address,uint256,uint256,uint256,uint256,ui
 export const RAGEQUIT_SIG = "ragequit(uint256,uint256,uint256,uint256)";
 export const REFUND_SIG = "refund()";
 
-// Memory: 0x80 public inputs, 0x180 vk_x, 0x200 ec scratch, 0x300 proof, 0x400 pairing input.
+// Memory: 0x80 public inputs (for a withdrawal, first the 7 statement values, then the 3 compressed signals),
+// 0x180 vk_x, 0x200 ec scratch, 0x300 proof (and a withdrawal's beta at 0x400), 0x400 pairing input.
 function g2(p) {
   return [p[0][1], p[0][0], p[1][1], p[1][0]];
 }
@@ -100,7 +101,12 @@ function validatorYul({ profile, rootSalt, minExec, minState, feeRange }) {
     : "";
   const w = vk("withdraw");
   const q = vk("ragequit");
-  if (w.nPublic !== 7 || q.nPublic !== 5) throw new Error("public inputs changed: update the validator");
+  // The withdrawal statement is compressed (eprint 2025/1500): [beta, gamma, alpha]. The ragequit's 5 are not.
+  if (w.nPublic !== 3 || q.nPublic !== 5) throw new Error("public inputs changed: update the validator");
+  // gamma = x0 + x1*s + ... + x6*s^6 mod r by Horner, over the statement at 0x80..0x140.
+  const horner = Array.from({ length: 7 }, (_, j) => 6 - j)
+    .map((i) => `g := addmod(mulmod(g, s, ${R}), mload(${0x80 + i * 32}), ${R})`)
+    .join("\n          ");
   return `
 object "RelaylessValidator" {
   code {
@@ -142,11 +148,11 @@ ${r.frameChecks}
 
         ${feeRangeChecks}
 
-        // Exactly one ARBITRARY signature of 256 bytes (the proof). Extra entries would cost the payer calldata gas.
+        // Exactly one ARBITRARY signature: the proof, 256 bytes, plus beta for a withdrawal. Extra entries would cost the
+        // payer calldata gas.
         need(eq(txparam(0x07), 0))
         need(eq(txparam(0x0B), 1))
         need(eq(sigparam(0, 0x01), 0))
-        need(eq(sigparam(0, 0x03), 256))
 
         // One nonce key, first use: consumed by APPROVE, so this is what stops a double spend.
         need(eq(txparam(0x0E), 1))
@@ -177,6 +183,7 @@ ${r.frameChecks}
         switch selector
         case ${sel(WITHDRAW_SIG)} {
           need(eq(frameparam(${S}, 4), 196))
+          need(eq(sigparam(0, 0x03), 288))
           let frames := txparam(0x09)
           switch frames
           case ${S + 1} {}
@@ -197,7 +204,9 @@ ${r.frameChecks}
           let change := framedata(100, ${S})
           let k := framedata(164, ${S})
           need(eq(framedata(132, ${S}), nullifierHash))
-          // Each must be a canonical field element: amount + r would verify the same and pay out a fortune.
+          // Each must be a canonical field element. The verifier never sees these values, only their compression, and an
+          // aliased value (x + r) gives a new alpha for the same field element, so a proof for it verifies: amount + r
+          // would pay out a fortune, and nullifierHash + r would be a fresh nonce key for a spent note.
           field(amount)
           need(change)
           field(change)
@@ -222,11 +231,23 @@ ${r.frameChecks}
           mstore(0x120, k)
           mstore(0x140, aspRoot)
           checkFees(amount, fee)
-          verbatim_4i_0o(hex"b5", 0x300, 0, 256, 0)
+          verbatim_4i_0o(hex"b5", 0x300, 0, 288, 0)
+
+          // Compression: alpha from what this transaction carries, beta from after the proof, then gamma.
+          let alpha := mod(keccak256(0x80, 224), ${R})
+          let beta := mload(0x400)
+          field(beta)
+          let s := addmod(alpha, beta, ${R})
+          let g := 0
+          ${horner}
+          mstore(0x80, beta)
+          mstore(0xa0, g)
+          mstore(0xc0, alpha)
           verifyWithdraw()
         }
         case ${sel(RAGEQUIT_SIG)} {
           need(eq(frameparam(${S}, 4), 132))
+          need(eq(sigparam(0, 0x03), 256))
           need(eq(txparam(0x09), ${S + 1}))
           ${r.count(1)}
           let label := framedata(4, ${S})
