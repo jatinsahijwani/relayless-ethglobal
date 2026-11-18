@@ -1,5 +1,17 @@
 # Progress
 
+## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
+
+### Part A: post-merge check and small fixes
+| Step | State |
+|---|---|
+| PR #5 merged | Yes, 2026-11-17 05:44 UTC, merge commit `9e9536c`. `main`'s README has `## Public testnet` at line 156, and the status table's `#public-testnet` link resolves to it |
+| Plain-text mentions linked | `docs/testnet-run.md` (2), `PROGRESS.md` (2) |
+| `docs/landscape.md` | Corrected: chain 8141 runs ethrex `64b8fc09`, which relaxes one-pending-per-sender for disjoint nonce keys and has no width budget. MATCHA is in `247e2dd2`, on by default. Both checked against minimal-shielded-pool's SECURITY.md on 2026-11-17. Chain 8141 results added to "Where Relayless is different", and the out-of-date "catch up" bullets fixed |
+| CI on `main` | Green on `9e9536c` (`unit` passed; `e2e` runs on dispatch and nightly only). The `relayless-ens` Vercel project still fails, as expected; that's a Vercel setting |
+
+**Noticed in the live SECURITY.md:** `247e2dd2` panics when a top-level frame calls a precompile after an earlier frame emitted logs, which can stop a node producing blocks. No Relayless frame targets a precompile (the validator calls the pairing precompile from inside the pool's VERIFY frame), but the Part D harness on `247e2dd2` has to watch for it.
+
 ## Stage 2: refocus (branch `refocus`, started 2026-11-16)
 The positioning is `docs/landscape.md`. The hackathon version stays reachable at the tag `v1.0-ethglobal-mumbai`, and everything below the Stage 2 sections describes it.
 
@@ -105,7 +117,7 @@ Done on `refocus`, with the author's decisions: two profiles now (`devnet-8421`,
 - The old `packages/contracts/generated/validator.json` (git-ignored) is no longer read, and was left on disk.
 
 ### Part 5: deployed and exercised on chain 8141
-**5/5 on the public chain, 2026-11-16.** Pool `0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225`, validator `0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c`. Every transaction, with explorer links, is in the README's "Public testnet" section. The deployer was a throwaway key (`0x5D5d…5e61`, in git-ignored `.env.hegota-8141`) funded by the author from the faucet with 1 ETH.
+**5/5 on the public chain, 2026-11-16.** Pool `0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225`, validator `0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c`. Every transaction, with explorer links, is in the README's [Public testnet](README.md#public-testnet) section. The deployer was a throwaway key (`0x5D5d…5e61`, in git-ignored `.env.hegota-8141`) funded by the author from the faucet with 1 ETH.
 
 | Step | Result |
 |---|---|
@@ -124,7 +136,7 @@ The sequence is in `docs/testnet-run.md`. What was prepared:
 | `scripts/testnet-key.sh` | Fresh throwaway key in `.env.hegota-8141` (git-ignored) |
 | `scripts/testnet-preflight.ts` | **Passes against chain 8141**, read-only: chain id, client `64b8fc09`, recent-root code hash, nonce manager, slots, and our encoding decoded by the node |
 | `scripts/testnet-run.ts` | Deposit, private withdrawal to a 0-ETH address, double spend refused, concurrent withdrawals, ragequit. **Rehearsed 5/5 on the local `hegota-8141` chain** |
-| README "Public testnet" | Filled from the run's output |
+| README [Public testnet](README.md#public-testnet) | Filled from the run's output |
 | Funds needed | About 0.15 ETH on chain 8141 |
 
 ## Hackathon status (as judged)

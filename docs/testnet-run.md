@@ -1,6 +1,6 @@
 # Public testnet run (chain 8141)
 
-The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: done on 2026-11-16, 5/5.** Results and explorer links are in the README's "Public testnet" section.
+The run that puts a Relayless pool on the Hegotá privacy testnet and exercises it. **Status: done on 2026-11-16, 5/5.** Results and explorer links are in the README's [Public testnet](../README.md#public-testnet) section.
 
 ## The network
 | | |
@@ -33,7 +33,7 @@ npx tsx scripts/deploy.ts hegota-8141                     # writes config/hegota
 npx tsx scripts/testnet-run.ts hegota-8141                # the five steps below, recorded with explorer links
 ```
 
-`testnet-run.ts` asserts each step, writes `.relayless-testnet-hegota-8141.json`, and prints the rows for the README's "Public testnet" table:
+`testnet-run.ts` asserts each step, writes `.relayless-testnet-hegota-8141.json`, and prints the rows for the README's [Public testnet](../README.md#public-testnet) table:
 
 1. **Deposit:** five notes of 0.02 ETH.
 2. **Private withdrawal** of 0.015 ETH to a derived address with no balance and no history, checked at 0 ETH before. Every frame must succeed.

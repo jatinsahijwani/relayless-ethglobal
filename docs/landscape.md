@@ -38,7 +38,9 @@ An immutable, native-ETH shielded pool on the ethrex Hegotá testnet (chain 8141
   - an alt mempool or staking path;
   - reputation.
 
-  Its SECURITY.md notes that per-sender mempool and inclusion-list limits hit every user at once, and that ethrex's MATCHA width budget means a few concurrent spends, or one user replacing a spend, can delay everyone.
+  Its SECURITY.md notes that per-sender mempool and inclusion-list limits hit every user at once. It names two ethrex revisions:
+  - **`64b8fc09`, which chain 8141's RPC node runs** (`bdfc5d8f` plus eight testnet fixes), relaxes EIP-8141's one-pending-per-sender rule for spends with disjoint nonce keys and **has no width budget**.
+  - **`247e2dd2`, which its native test suite pins,** relaxes the same rule but also runs MATCHA, on by default. A few concurrent spends, or one note holder replacing a spend, can delay everyone. `247e2dd2` also panics when a top-level frame calls a precompile after an earlier frame emitted logs. `64b8fc09` carries the fix.
 
 ### 2. Nethermind, "A privacy pool on frame transactions: what works, and the case that does not yet"
 [Post](https://ethresear.ch/t/a-privacy-pool-on-frame-transactions-what-works-and-the-case-that-does-not-yet/26223) (Daniil Ankushin and Manuel Arto, November 2026)
@@ -66,7 +68,7 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
   - Width is earned only from the sender's gas used in finalized blocks.
   - Spent width is never returned, which bounds repeated mass invalidation.
   - FOCIL (EIP-8369) is meant to make flooding with valid transactions costly.
-- **Already in a client:** ethrex `247e2dd2` implements a MATCHA width budget, according to minimal-shielded-pool's SECURITY.md.
+- **Already in a client:** ethrex `247e2dd2` implements a MATCHA width budget, on by default, according to minimal-shielded-pool's SECURITY.md. **Chain 8141 doesn't run it:** its RPC node runs `64b8fc09`, which only relaxes the per-sender rule for disjoint nonce keys.
 - **The authors' own next steps:**
   - test mass invalidation and width draining, including repeated replacements;
   - calibrate charges and caps;
@@ -83,7 +85,7 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 |---|---|---|
 | Pool is the sender and pays gas from the note | Yes | namnc's L1.5 post, minimal-shielded-pool |
 | Nullifier = EIP-8250 nonce key | Yes | Same |
-| Root via EIP-8272, no storage reads in validation | Yes (devnet field form) | Same (current VERIFY-frame form) |
+| Root via EIP-8272, no storage reads in validation | Yes (devnet field form on `devnet-8421`, VERIFY-frame form on `hegota-8141`) | Same (current VERIFY-frame form) |
 | Yul validator with `verbatim` | Yes | Same |
 | Settlement can't fail after approval | Yes, fuzz-tested | Same, with pinned limits |
 | Every public input range-checked | Yes | Same |
@@ -92,11 +94,11 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 
 ## Where they are ahead
 
-- **Compressed statement:** 3 public inputs, against our 7 (253k vs about 211k gas of verification).
+- **Compressed statement:** 3 public inputs, against our 7 (our pool VERIFY frame uses 253k on `devnet-8421` and 233,383 on `hegota-8141`, against a floor of about 211k).
 - **Private transfers:** join-split. Relayless only withdraws and pays.
 - **Wallet security:** owner sets and hardware-wallet signing, post-quantum note delivery, disclosure receipts.
 - **Assurance:** a formal-methods effort and a reproducible-artifact discipline.
-- **Up to date:** the current-spec profile and public testnet history.
+- **Up to date:** the current-spec profile (`owner-set-v1`) and public testnet history since September 2026. Relayless has `devnet-8421` and `hegota-8141`, and has been on chain 8141 since 2026-11-16.
 
 ## Where Relayless is different: our contribution
 
@@ -108,8 +110,13 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
    - ERC-8421 counts every transaction admitted but never mined against the sender. A shared pool sender inherits that risk from every user.
    - We measured griefing (`seen`/`included` across nodes), found a replacement-counting bug that the alt mempool authors confirmed, fixed it with a test, and proposed an eviction rule: don't count it against the sender when its own nonce key was consumed on-chain.
    - MATCHA covers the public mempool. **No one has studied how width and ERC-8421 stake and reputation interact for shared senders.**
-3. **Compliance: association sets and ragequit,** the Privacy Pools model. Withdrawals prove membership in an approved set, and excluded depositors can always exit publicly to their deposit address. The reference pool has disclosure receipts but no association sets.
-4. **The developer and user layer:**
+3. **Running on chain 8141, with association sets and change notes** (`hegota-8141` profile, 2026-11-16, 5/5; links in the README's [Public testnet](../README.md#public-testnet) section):
+   - A private withdrawal to a fresh address holding 0 ETH, paid entirely from the note through the chain's public mempool: no relayer, no alt mempool, no stake. 941,778 gas: root frame 5,579, pool VERIFY 233,383 + 97,920 state, SENDER 193,729 + 379,440 state, refund 9,967.
+   - A double spend refused by the node's simulation before broadcast, on the nonce.
+   - Three withdrawals from the one pool sender pending at once. **This shows `64b8fc09`'s relaxed per-sender rule for disjoint nonce keys, not MATCHA,** which chain 8141 doesn't run.
+   - A public exit (ragequit) to the depositor.
+4. **Compliance: association sets and ragequit,** the Privacy Pools model. Withdrawals prove membership in an approved set, and excluded depositors can always exit publicly to their deposit address. The reference pool has disclosure receipts but no association sets.
+5. **The developer and user layer:**
    - seed recovery from one wallet signature;
    - any-amount payments, split across notes and pending concurrently;
    - an admission simulation before broadcast, so a failing transaction is never sent and never costs reputation;
@@ -119,8 +126,8 @@ A local mempool policy that lets one shared sender (a privacy pool) have many pe
 
 ## Where we must catch up
 
-- **Spec version:** we're on the devnet profile (a root-reference transaction field, the old nonce-manager address, 20k first-use gas). The current specs use a recent-root VERIFY frame, the nonce manager at `0x8250968C…`, and 97,920 state gas per new key.
-- **Not on a public testnet** yet.
+- **Spec version:** ported on 2026-11-16 to two profiles: `devnet-8421` (the sidecar devnet) and `hegota-8141` (chain 8141: recent-root VERIFY frame, nonce manager at `0x8250968C…`, 97,920 state gas per new key). Not yet on `owner-set-v1` or the EIPs at current master (`eips-current`).
+- **Public testnet history:** one run on chain 8141 (2026-11-16), against the reference pool's deployments since September 2026.
 - **Uncompressed public inputs.**
 - **No transfers.**
 - **Devnet-grade trusted setup** and no audit.
