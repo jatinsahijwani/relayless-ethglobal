@@ -1,0 +1,209 @@
+{
+  "target": "ethrex-64b8fc09",
+  "describe": "ethrex 64b8fc09 (chain 8141's revision) in dev mode, one node, --mempool.max-verify-gas 500000. Relaxes one-pending-per-sender for disjoint nonce keys; no width budget",
+  "network": "local-hegota",
+  "pool": "0x674e97e4a96ae7bfbbff3e2b85cd2c1caf666a34",
+  "startedAt": "2026-11-17T08:03:15.003Z",
+  "attacks": {
+    "honestBefore": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 2026,
+        "blocks": [
+          20023
+        ],
+        "matchaCharges": [],
+        "matchaAdmissibleBefore": [],
+        "refusedThenRetried": [],
+        "sinceSendMs": 2051
+      }
+    },
+    "conflictAcrossNodes": {
+      "measured": {
+        "pairs": 3,
+        "rows": [
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          },
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          },
+          {
+            "first": "admitted",
+            "secondSameFee": "Invalid params: Attempted to replace a pooled transaction with an underpriced transaction"
+          }
+        ],
+        "reputationBefore": {
+          "ethrex 64b8fc09": null
+        },
+        "reputationAfter": {
+          "ethrex 64b8fc09": null
+        },
+        "allSpentOnce": true
+      },
+      "notes": [
+        "One node only (dev mode, p2p disabled), so the cross-node case reduces to a same-fee conflict on one node."
+      ]
+    },
+    "replacementSpam": {
+      "measured": {
+        "bumps": 10,
+        "burstMs": 46,
+        "accepted": 10,
+        "refusals": [],
+        "reputationBefore": {
+          "ethrex 64b8fc09": null
+        },
+        "reputationAfterBurst": {
+          "ethrex 64b8fc09": null
+        },
+        "reputationAfterLanding": {
+          "ethrex 64b8fc09": null
+        },
+        "noteSpentOnce": true,
+        "baseline": null
+      }
+    },
+    "widthDraining": {
+      "measured": {
+        "belowBaseFee": {
+          "admitted": false,
+          "error": "Invalid params: Frame transaction validation-prefix simulation failed: Invalid Transaction: Insufficient max fee per gas"
+        },
+        "priced": "the cheapest includable price (1-wei tip)",
+        "sent": 10,
+        "admitted": 10,
+        "refusals": [],
+        "attackPendingAfter2Blocks": 0,
+        "honest": {
+          "admitted": true,
+          "landedMs": 2011
+        },
+        "watch": [
+          {
+            "afterBlocks": 5,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 10,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 15,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 20,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 25,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          },
+          {
+            "afterBlocks": 30,
+            "attackPending": 0,
+            "sidecarStatuses": null
+          }
+        ],
+        "reputationBefore": {
+          "ethrex 64b8fc09": null
+        },
+        "reputationAfter": {
+          "ethrex 64b8fc09": null
+        }
+      }
+    },
+    "replacementDraining": {
+      "measured": {
+        "holders": 4,
+        "bumpsEach": 5,
+        "burstMs": 86,
+        "baseline": "admitted",
+        "attackAccepted": 20,
+        "attackSent": 20,
+        "attackRefusals": [],
+        "honest": {
+          "admittedRightAway": true,
+          "retry": null
+        },
+        "reputationBefore": {
+          "ethrex 64b8fc09": null
+        },
+        "reputationAfter": {
+          "ethrex 64b8fc09": null
+        }
+      }
+    },
+    "massInvalidation": {
+      "measured": {
+        "pending": 6,
+        "validAtStart": 6,
+        "parkedOnNonMiningNode": 0,
+        "changes": [
+          {
+            "after": "a deposit (new leaf, new root published, pool balance up)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          },
+          {
+            "after": "another withdrawal landed (new leaf, new root, pool balance down, a nonce key consumed)",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          },
+          {
+            "after": "20 more blocks",
+            "stillValid": 6,
+            "reasons": [],
+            "parkedStatuses": null
+          }
+        ]
+      },
+      "notes": [
+        "Validity checked by the target chain's own simulation after each change. The only state a withdrawal's validation depends on is its own nonce key, the recent-root window and the pool's balance covering its maxCost."
+      ]
+    },
+    "honestAfter": {
+      "measured": {
+        "sent": 6,
+        "admittedAtOnce": 6,
+        "refusals": [],
+        "landed": 6,
+        "allLandedMs": 3056,
+        "blocks": [
+          20172,
+          20173
+        ],
+        "matchaCharges": [],
+        "matchaAdmissibleBefore": [],
+        "refusedThenRetried": [],
+        "sinceSendMs": 3070
+      }
+    }
+  },
+  "widthTimeline": [],
+  "versions": {
+    "chain": "ethrex/v23.0.0-HEAD-64b8fc09d47d7787eb1a4e3f082aa9e831dc5f8c/aarch64-apple-darwin/rustc-v1.93.0",
+    "ethrex 64b8fc09": "ethrex/v23.0.0-HEAD-64b8fc09d47d7787eb1a4e3f082aa9e831dc5f8c/aarch64-apple-darwin/rustc-v1.93.0"
+  },
+  "reputationStart": {
+    "ethrex 64b8fc09": null
+  },
+  "finalityLagBlocks": 0,
+  "reputationEnd": {
+    "ethrex 64b8fc09": null
+  },
+  "finishedAt": "2026-11-17T08:09:48.445Z"
+}

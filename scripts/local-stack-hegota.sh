@@ -10,12 +10,14 @@
 # Everything binds to localhost. Stop with: pkill -f 'ethrex.*hegota-stack'
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Overridable so a second chain can run beside this one (research/shared-sender runs ethrex 247e2dd2 this way).
 WORK="${RELAYLESS_HEGOTA_DIR:-$ROOT/.relayless/hegota-stack}"
+NAME="${RELAYLESS_HEGOTA_NAME:-local-hegota}"
 ETHREX_REPO=https://github.com/lambdaclass/ethrex.git
-ETHREX_COMMIT=64b8fc09d47d7787eb1a4e3f082aa9e831dc5f8c # web3_clientVersion on rpc1.privacy.ethrex.xyz, 2026-11-16
-CHAIN_ID=81410
-PORT=18645
-AUTH_PORT=18651
+ETHREX_COMMIT="${ETHREX_COMMIT:-64b8fc09d47d7787eb1a4e3f082aa9e831dc5f8c}" # web3_clientVersion on rpc1.privacy.ethrex.xyz, 2026-11-16
+CHAIN_ID="${RELAYLESS_HEGOTA_CHAIN_ID:-81410}"
+PORT="${RELAYLESS_HEGOTA_PORT:-18645}"
+AUTH_PORT="${RELAYLESS_HEGOTA_AUTH_PORT:-18651}"
 RPC=http://127.0.0.1:$PORT
 mkdir -p "$WORK"
 
@@ -67,16 +69,16 @@ if ! cast chain-id --rpc-url "$RPC" >/dev/null 2>&1; then
   nohup "$ETHREX_BIN" --dev --network "$WORK/genesis.json" --datadir "$WORK/data" \
     --http.addr 127.0.0.1 --http.port "$PORT" --http.api eth,net,web3,txpool,debug,ethrex \
     --authrpc.addr 127.0.0.1 --authrpc.port "$AUTH_PORT" --authrpc.jwtsecret "$WORK/jwt.hex" \
-    --p2p.disabled --mempool.max-verify-gas 500000 --log.level info > "$WORK/ethrex.log" 2>&1 &
+    --p2p.disabled --mempool.max-verify-gas 500000 --log.level info ${ETHREX_EXTRA_ARGS:-} > "$WORK/ethrex.log" 2>&1 &
   until cast chain-id --rpc-url "$RPC" >/dev/null 2>&1; do sleep 1; done
 fi
 echo "waiting for the Hegotá predeploys..."
 until [ "$(cast code 0x0000000000000000000000000000000000008272 --rpc-url "$RPC" 2>/dev/null || echo 0x)" != "0x" ]; do sleep 1; done
 
-printf '{\n  "name": "local-hegota",\n  "profile": "hegota-8141",\n  "chainId": %s,\n  "rpc": "%s",\n  "reserveEth": "1"\n}\n' "$CHAIN_ID" "$RPC" > config/local-hegota.json
+printf '{\n  "name": "%s",\n  "profile": "hegota-8141",\n  "chainId": %s,\n  "rpc": "%s",\n  "reserveEth": "1"\n}\n' "$NAME" "$CHAIN_ID" "$RPC" > "config/$NAME.json"
 [ -f packages/circuits/build/withdraw.zkey ] || pnpm build:circuits
 pnpm build:contracts
-npx tsx scripts/deploy.ts local-hegota
+npx tsx scripts/deploy.ts "$NAME"
 echo
-echo "Ready: pool in config/local-hegota.deployed.json. Keys for this chain: $WORK/keys.env"
-echo "Run the end-to-end suite with: set -a; . $WORK/keys.env; set +a; pnpm e2e local-hegota"
+echo "Ready: pool in config/$NAME.deployed.json. Keys for this chain: $WORK/keys.env"
+echo "Run the end-to-end suite with: set -a; . $WORK/keys.env; set +a; pnpm e2e $NAME"

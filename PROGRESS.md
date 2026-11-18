@@ -48,6 +48,51 @@ Done on branch `compression` (stacked on `post-merge-fixes`). The withdrawal sta
 - My first version of `alias.ts` judged the devnet's simulation by a field only `64b8fc09` returns, so its devnet "refusals" were meaningless. It now uses the SDK's own preflight rule, and the devnet refuses each aliased transaction at the pool's VERIFY frame.
 - `scripts/alias.ts` wasn't run against chain 8141. It sends nothing, but it needs a deposit and a funded throwaway key, and the local runs on the same client revision cover it.
 
+### Part C: upstream contributions, prepared, not opened
+Nothing was pushed or opened. The branches are in a local clone outside our repo: **`~/Desktop/relayless-upstream/mempool-workshop-sidecar`**, from upstream `master` at `2e22ff0a` (the default branch, unchanged since 2026-10-25).
+
+| Draft | Branch | Checked |
+|---|---|---|
+| [PR 1: replacements aren't a new `seen`](docs/drafts/sidecar-pr1.md) | `fix/replacement-not-seen` (`4184aec`, 4 files) | Builds. New test fails without the fix (4 of 7, `seen` called 9 times instead of 1). Executor suite 393 passed, against 386 on `master` |
+| [PR 2: per-entity budgets, pure-precompile allowlist](docs/drafts/sidecar-pr2.md) | `feat/per-entity-budgets-precompiles` (`2d4018f`, 6 files) | Builds. 10 new tests fail without the change. Executor suite 396 passed. Suggests an issue first, with text |
+| [Issue: eviction by the sender's own consumed key](docs/drafts/sidecar-issue-eviction.md) | none | Grounded in ERC-8421's PROPAGATION-040, with a code sketch |
+
+**End to end:** both branches merged locally (`local/integration-pr1-pr2`, not for upstream) and run as our devnet's sidecar with **no `precompiles` config**: `scripts/e2e.ts local` passed 34/34. The devnet's usual sidecar was put back afterwards.
+
+**Live sources that differed:**
+- **BUDGET-010 now says how to attribute frames.** Per ERC-8421's text at ethereum/ERCs#2028 (head `493ba8ac`), a `pre_verify` frame counts toward its approving frame's entity, and an `expiry_verify` frame toward no entity. Our patch charged `expiry_verify` to the sender. The PR 2 branch follows the ERC.
+- **The sidecar's CONTRIBUTING.md says Yarn and Lerna,** but the repo builds with bun. I used bun.
+- On both `master` and the branches, 5 executor test files fail to load before running (missing generated EntryPoint types and similar). They're pre-existing and untouched.
+
+### Part D: shared-sender reputation and MATCHA, measured
+`research/shared-sender/`: a harness with one command per target, raw JSON in `results/`, write-up in [RESULTS.md](research/shared-sender/RESULTS.md). Local chains only.
+
+| Target | Command | Ran |
+|---|---|---|
+| ERC-8421 sidecar without the replacement fix | `research/shared-sender/run-sidecar.sh nofix` | Yes |
+| ERC-8421 sidecar with the fix | `research/shared-sender/run-sidecar.sh fix` | Yes |
+| ethrex `64b8fc09` | `research/shared-sender/run-ethrex.sh 64b8fc09` | Yes |
+| ethrex `247e2dd2` (MATCHA), 64-block finality lag | `research/shared-sender/run-ethrex.sh 247e2dd2` | Yes, after a dev-producer patch (`patches/ethrex-dev-hegota-247e2dd2.patch`) |
+
+**Headline results (measured):**
+- **Replacement spam, 10 bumps:** sidecar without the fix `seen` +10, with it +1. MATCHA: 1 of 10 accepted, leaving the pool 27,380 width for everyone.
+- **4 holders × 5 bumps:** sidecar `seen` +22 without the fix, +6 with it. MATCHA: all 20 accepted, width 20.5M → 11.3M (21 charges), none returned.
+- **Conflicts across nodes:** the non-mining sidecar ends at `seen 3, included 0` with or without the fix.
+- **Mass invalidation:** 6 of 6 withdrawals stay valid after every change, on all four targets. Statically, the validator reaches no state-reading opcode.
+- **MATCHA calibration:** about 438,550 width per additional withdrawal; about 994,000 credited per landed withdrawal at finality; a fresh pool admits 1 of 3; 6 honest withdrawals at once cost 8 charges (3 for revalidation).
+- **Below-base-fee parking:** refused at admission by all three clients.
+
+**Things I noticed:**
+- Docker had quit earlier (Part B). Starting it brought back an unrelated container, stopped again.
+- Each sidecar instance needs its own WebSocket port; the default collides with the devnet's sidecar. Fixed in the wrapper.
+- My first harness runs had bugs (a 0-wei tip the node refuses, a stale MATCHA pool, a spam step that only replaced the free baseline). The results in `results/` are from the final version, run on 2026-11-17.
+
+### Part E: research and outreach drafts, not sent
+All in `docs/drafts/`: `reply-nethermind-thread.md`, `reply-matcha-thread.md`, `support-eip-8250-8272.md`, `ethresearch-post-outline.md`, `esp-office-hours-request.md`, `grant/evidence.md`, `grant/proposal-skeleton.md`. Their numbers are from Parts B and D and chain 8141; calculated figures are marked. Both forum threads were re-read on 2026-11-17 for the replies.
+
+### Part F: SDK design, for approval
+[`docs/sdk-design.md`](docs/sdk-design.md): package layout, a type-safe API with the profile as a type parameter, admission simulation across ethrex, the sidecar and a partial Nethermind fallback, fee bumps that re-prove through a callback, how Relayless would consume it, release 0.1, and seven open questions. Nothing implemented.
+
 ## Stage 2: refocus (branch `refocus`, started 2026-11-16)
 The positioning is `docs/landscape.md`. The hackathon version stays reachable at the tag `v1.0-ethglobal-mumbai`, and everything below the Stage 2 sections describes it.
 

@@ -28,6 +28,20 @@ Compression changes the withdrawal key, so the validator and the pool are new: `
 ### The local devnet was restarted from a new genesis
 Docker had quit, and after a restart the two beacons found no peers and stopped producing. `scripts/local-stack.sh` now notices when its cached staking registry isn't on the chain, redeploys it and refunds the sidecar's faucet. The old chain data was moved aside, not deleted.
 
+### Part C: the upstream branches follow ERC-8421's current text
+BUDGET-010 in ethereum/ERCs#2028 (head `493ba8ac`) attributes a `pre_verify` frame to its approving frame's entity and an `expiry_verify` frame to no entity. Our Stage 1 patch charged `expiry_verify` to the sender; the PR 2 branch follows the ERC. The two fixes are separate branches, as the brief asked, and the precompile default is code, not just config, because CALLING-040 allows those precompiles; the draft suggests an issue first because it changes the gateway's default policy.
+
+### Part D: how the shared-sender harness was set up
+- **Sidecar variants come from our patches on upstream `2e22ff0a`,** not from our devnet's own sidecar. "Without the fix" still has the per-entity budgets patch: without it the pool's withdrawals (about 228,000 gas of validation) aren't admitted at all, so there would be nothing to measure.
+- **ethrex `247e2dd2` needed a second dev patch** (`patches/ethrex-dev-hegota-247e2dd2.patch`): its `ForkChoiceUpdatedV5` has a `custody_columns` field, which the dev producer sets to `None`, and an opt-in `ETHREX_DEV_FINALITY_LAG`. MATCHA credits width only at finality, and dev mode finalizes every block at once, which would make width look free. The harness runs with a 64-block lag, about two epochs. Both changes touch only the dev block producer.
+- **`scripts/local-stack-hegota.sh` is now parametrized** (name, ports, chain id, client commit, extra node arguments), so the MATCHA chain runs beside the `64b8fc09` one. Defaults are unchanged.
+- **Below-base-fee withdrawals can't be priced by the SDK,** because the node won't simulate them. For that probe only, the harness over-estimates `maxCost`. All three clients refused such withdrawals at admission anyway.
+- **The "width draining" step sends one at a time,** so on MATCHA each was the free baseline. The burst case is the replacement-draining step. RESULTS.md says so rather than presenting the first as a draining result.
+- **Nothing ran against chain 8141.**
+
+### Part E: drafts only
+Every draft is under `docs/drafts/`, nothing was posted or sent, and every number in them comes from our measured results, with calculated figures marked.
+
 ## Stage 2 (2026-11-16): the core is the pool, the alt mempool path and a provider-agnostic association set
 The positioning is `docs/landscape.md`: the pool primitive isn't novel, so the core keeps what is ours (the ERC-8421 path, shared-sender reputation, compliance, the SDK) and drops what's not research. Everything removed is in the tag `v1.0-ethglobal-mumbai`.
 
