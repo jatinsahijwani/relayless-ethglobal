@@ -1,6 +1,6 @@
 # Draft: sidecar PR 2, per-entity budgets and a pure-precompile allowlist
 
-**Not sent.** For the author to review, then push and open. **Consider opening the issue below first.**
+**Opened on 2026-11-18, narrowed to precompiles: [https://github.com/forshtat/mempool-workshop-sidecar/issues/11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11).** BUDGET-010 was already covered by three open upstream PRs (#2, #3, #4), and #3 asked for the precompile default as a separate PR. So the issue covers CALLING-040 only, with a precompile-only implementation on [`feat/pure-precompiles-default`](https://github.com/jatinsahijwani/mempool-workshop-sidecar/tree/feat/pure-precompiles-default) (`a506601`, 2 files, +45 −2, executor suite 388 passed). No PR is open; the issue asks whether they want it. The combined branch below was not pushed.
 
 | | |
 |---|---|

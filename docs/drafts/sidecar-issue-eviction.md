@@ -1,6 +1,6 @@
 # Draft: sidecar issue, don't count an eviction caused by the sender's own consumed nonce key
 
-**Not sent.** For the author to review and open as an issue on `forshtat/mempool-workshop-sidecar`. It's an issue, not a PR, because it reads ERC-8421 in a way the authors may not share, and the right fix may belong in the ERC.
+**Opened on 2026-11-18: [https://github.com/forshtat/mempool-workshop-sidecar/issues/10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10)**, titled "Reputation: don't count an eviction caused by the sender's own consumed nonce key", linking RESULTS.md and #9. It's an issue, not a PR, because it reads ERC-8421 in a way the authors may not share, and the right fix may belong in the ERC.
 
 ## Title
 `Reputation: a pending transaction evicted because its own nonce key was consumed on chain shouldn't count against the sender`

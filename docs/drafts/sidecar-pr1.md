@@ -1,6 +1,6 @@
 # Draft: sidecar PR 1, replacements must not count as `seen`
 
-**Not sent.** For the author to review, then push and open.
+**Opened on 2026-11-18: [https://github.com/forshtat/mempool-workshop-sidecar/pull/9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9)** (commit `8e8cda1`, the same change as `4184aec` without the co-author trailer). The opened body uses RESULTS.md's numbers (10 bumps: `seen` +10 → +1; 20-bump burst: +22 → +6) and notes that it applies cleanly with upstream #6.
 
 | | |
 |---|---|
