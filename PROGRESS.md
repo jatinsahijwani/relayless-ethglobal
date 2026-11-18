@@ -2,6 +2,17 @@
 
 ## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
 
+### Part G: upstream contributions opened (2026-11-18)
+On `forshtat/mempool-workshop-sidecar`, from the fork `jatinsahijwani/mempool-workshop-sidecar`. Upstream `master` was still `2e22ff0a`, so no rebase was needed. The co-author trailer was removed from the commits before pushing.
+
+| What | Link | Branch | Checked before posting |
+|---|---|---|---|
+| PR: a replacement is not a new `seen` | [#9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9) | `fix/replacement-not-seen` (`8e8cda1`) | Builds. 7 of 7 pass; 4 of 7 fail with `src` reverted. Applies cleanly with upstream #6 |
+| Issue: eviction by the sender's own consumed key | [#10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10) | none | Numbers from RESULTS.md |
+| Issue: pure precompiles by default | [#11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11) | [`feat/pure-precompiles-default`](https://github.com/jatinsahijwani/mempool-workshop-sidecar/tree/feat/pure-precompiles-default) (`a506601`) | Builds. 6 of 6 pass; 2 fail without it. Executor suite 388 passed (386 on `master`) |
+
+**Changed from the plan:** per-entity budgets (BUDGET-010) weren't proposed, because three open upstream PRs (#2, #3, #4) already implement them and #3 asked for the precompile default as a separate PR. Issue #11 covers only that, from a precompile-only branch split out of `feat/per-entity-budgets-precompiles`, which stays local. Email drafts for follow-up: `docs/drafts/emails/`, not sent.
+
 ### Part A: post-merge check and small fixes
 | Step | State |
 |---|---|
@@ -48,8 +59,8 @@ Done on branch `compression` (stacked on `post-merge-fixes`). The withdrawal sta
 - My first version of `alias.ts` judged the devnet's simulation by a field only `64b8fc09` returns, so its devnet "refusals" were meaningless. It now uses the SDK's own preflight rule, and the devnet refuses each aliased transaction at the pool's VERIFY frame.
 - `scripts/alias.ts` wasn't run against chain 8141. It sends nothing, but it needs a deposit and a funded throwaway key, and the local runs on the same client revision cover it.
 
-### Part C: upstream contributions, prepared, not opened
-Nothing was pushed or opened. The branches are in a local clone outside our repo: **`~/Desktop/relayless-upstream/mempool-workshop-sidecar`**, from upstream `master` at `2e22ff0a` (the default branch, unchanged since 2026-10-25).
+### Part C: upstream contributions, prepared (opened in Part G)
+Nothing was pushed or opened in this part. The branches are in a local clone outside our repo: **`~/Desktop/relayless-upstream/mempool-workshop-sidecar`**, from upstream `master` at `2e22ff0a` (the default branch, unchanged since 2026-10-25).
 
 | Draft | Branch | Checked |
 |---|---|---|

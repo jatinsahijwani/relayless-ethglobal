@@ -21,8 +21,8 @@
 **What exists today (measured, linked in the repository):**
 - 🥇 1st place, EF: Best use of the Frame Transaction Alternative Mempool, ETHGlobal Mumbai 2026.
 - Deployed twice on chain 8141, 5/5 each time: a private withdrawal to a wallet holding 0 ETH, a double spend refused before broadcast, three concurrent withdrawals from one sender in one block, and a public exit. The current withdrawal uses 916,820 gas and declares 268,100 gas of validation, under Nethermind's 300,000 default, after compressing the public inputs (eprint 2025/1500).
-- Two fixes and an issue prepared for the ERC-8421 sidecar (replacement counting, per-entity budgets with a pure-precompile default, and an eviction rule for shared senders).
-- A reproducible harness that attacks a shared sender in an ERC-8421 sidecar and in ethrex with and without MATCHA, with results published in the repository.
+- Upstream contributions to the ERC-8421 sidecar, opened 2026-11-18: [PR #9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9) (replacement counting, REPUTATION-040), [issue #10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10) (an eviction rule for shared senders), [issue #11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11) (pure precompiles by default, CALLING-040, with a ready branch).
+- A reproducible harness that attacks a shared sender in an ERC-8421 sidecar and in ethrex with and without MATCHA, with results published in the repository: https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md
 
 **Team:** *one line on the author.*
 

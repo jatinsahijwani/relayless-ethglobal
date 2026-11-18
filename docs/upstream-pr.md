@@ -2,6 +2,15 @@
 
 For the alt mempool team. The alt mempool authors have confirmed this is a prototype bug, not ERC-8421 behaviour.
 
+## Live upstream (opened 2026-11-18 on `forshtat/mempool-workshop-sidecar`)
+| What | Link | Status |
+|---|---|---|
+| PR: a replacement is not a new `seen` (REPUTATION-040) | [#9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9) | Open, awaiting review |
+| Issue: don't count an eviction caused by the sender's own consumed nonce key | [#10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10) | Open, asks whether this is the intended reading of PROPAGATION-040 |
+| Issue: allow pure precompiles by default (CALLING-040) | [#11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11) | Open. Ready branch: [`feat/pure-precompiles-default`](https://github.com/jatinsahijwani/mempool-workshop-sidecar/tree/feat/pure-precompiles-default); no PR until the maintainers say they want it |
+
+Per-entity budgets (BUDGET-010) weren't proposed: three open upstream PRs already implement them (#2, #3, #4). Updated measurements: [RESULTS.md](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md). The sections below are the original write-up.
+
 ## The bug
 `MempoolService.addFrameTx` calls `updateSeenStatus` after both of its branches, so every replacement counts as a new admission. ERC-8421's REPUTATION-040 says: *"Admitting a replacement is not a new occurrence of `seen` for any unchanged entity."*
 

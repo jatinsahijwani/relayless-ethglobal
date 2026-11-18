@@ -2,7 +2,7 @@
 
 A running log of every public result, with links, for grant applications. **Add a row whenever something becomes public.** Rows marked *prepared* or *local* aren't public yet: they're listed so nothing is forgotten, and must not be cited as public until they are.
 
-Last updated: 2026-11-17.
+Last updated: 2026-11-18.
 
 ## Recognition
 | Date | What | Link |
@@ -26,21 +26,21 @@ Last updated: 2026-11-17.
 ## Findings
 | Date | Finding | Status | Where |
 |---|---|---|---|
-| 2026-11 | The public ERC-8421 gateway can't admit any Groth16 withdrawal: its 100k cap applies even to staked senders (`250000 exceeds MAX_VERIFY_GAS 100000` from a staked sender), and precompiles count as undeployed code (COD-010) | Reproduced; fix prepared | [`docs/repro-gateway.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/repro-gateway.md) |
-| 2026-11 | The sidecar counts every fee-bump replacement as a new `seen` (ERC-8421 REPUTATION-040): 8 bumps took a shared sender's `seen` from 0 to 8 | Confirmed as a prototype bug by the alt mempool authors; fix and test prepared | [`docs/upstream-pr.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/upstream-pr.md) |
-| 2026-11 | A non-mining node charges a shared sender for a conflicting transaction that was mined elsewhere (`seen 2, included 0`) | Issue drafted | [`docs/reputation-analysis.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/reputation-analysis.md) |
+| 2026-11 | The public ERC-8421 gateway can't admit any Groth16 withdrawal: its 100k cap applies even to staked senders (`250000 exceeds MAX_VERIFY_GAS 100000` from a staked sender), and precompiles count as undeployed code (COD-010) | Reproduced. BUDGET-010 half covered by upstream PRs #2–#4; precompile half opened as [issue #11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11) | [`docs/repro-gateway.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/repro-gateway.md) |
+| 2026-11 | The sidecar counts every fee-bump replacement as a new `seen` (ERC-8421 REPUTATION-040): 8 bumps took a shared sender's `seen` from 0 to 8 | Confirmed as a prototype bug by the alt mempool authors; fix opened as [PR #9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9) | [`docs/upstream-pr.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/upstream-pr.md) |
+| 2026-11 | A non-mining node charges a shared sender for a conflicting transaction that was mined elsewhere (`seen 3, included 0` for three pairs, [RESULTS.md](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md)) | Opened as [issue #10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10) | [`docs/reputation-analysis.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/reputation-analysis.md) |
 | 2026-11-16 | The hackathon's reason for not compressing public inputs (SHA-256 in the circuit) was wrong: the hybrid scheme uses Poseidon | Corrected, then compression shipped | `DECISIONS.md` |
 
 ## Upstream contributions
-| Date | What | Status |
-|---|---|---|
-| 2026-11-17 | `forshtat/mempool-workshop-sidecar` PR: replacements aren't a new `seen` (REPUTATION-040), with a test that fails without it | *prepared, not opened* (`docs/drafts/sidecar-pr1.md`) |
-| 2026-11-17 | Same repo, PR: per-entity validation budgets (BUDGET-010) and pure precompiles allowed by default (CALLING-040) | *prepared, not opened* (`docs/drafts/sidecar-pr2.md`) |
-| 2026-11-17 | Same repo, issue: an eviction caused by the sender's own consumed nonce key shouldn't count against it | *prepared, not opened* (`docs/drafts/sidecar-issue-eviction.md`) |
+| Date | What | Link | What it shows |
+|---|---|---|---|
+| 2026-11-18 | `forshtat/mempool-workshop-sidecar` PR: replacements aren't a new `seen` (REPUTATION-040), with a test that fails without it | [PR #9](https://github.com/forshtat/mempool-workshop-sidecar/pull/9) | A spec-conformance bug fix to the ERC-8421 reference sidecar, measured: a 20-bump burst moves `seen` +6 instead of +22 |
+| 2026-11-18 | Same repo, issue: an eviction caused by the sender's own consumed nonce key shouldn't count against it | [Issue #10](https://github.com/forshtat/mempool-workshop-sidecar/issues/10) | A proposed reputation rule for shared senders, grounded in PROPAGATION-040 and a measured `seen 3, included 0` |
+| 2026-11-18 | Same repo, issue: allow pure precompiles by default (CALLING-040), with a ready, tested branch | [Issue #11](https://github.com/forshtat/mempool-workshop-sidecar/issues/11), [branch](https://github.com/jatinsahijwani/mempool-workshop-sidecar/tree/feat/pure-precompiles-default) | The fix that lets proof-verifying senders through the public gateway, with the safety argument |
 
 ## Research
 | Date | What | Status |
 |---|---|---|
 | 2026-11 | Shared-sender reputation griefing under ERC-8421, measured | Public in the repo: [`docs/reputation-analysis.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/reputation-analysis.md) |
-| 2026-11-17 | Shared senders against an ERC-8421 sidecar (with and without the fix), ethrex `64b8fc09` and ethrex `247e2dd2` (MATCHA): conflicts, replacement spam, width draining, mass invalidation, honest throughput | *local*, results in `research/shared-sender/RESULTS.md` once merged |
+| 2026-11-17 | Shared senders against an ERC-8421 sidecar (with and without the fix), ethrex `64b8fc09` and ethrex `247e2dd2` (MATCHA): conflicts, replacement spam, width draining, mass invalidation, honest throughput | Public: [RESULTS.md](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md) |
 | | ethresear.ch post on shared senders, reputation and MATCHA | *drafted, not posted* (`docs/drafts/ethresearch-post-outline.md`) |
