@@ -15,6 +15,13 @@ Adapted, with headers kept and changes noted in each file:
 
 The pool's label scheme and public-exit design also follow theirs.
 
+**soispoke's minimal-shielded-pool** (Apache-2.0): https://github.com/soispoke/minimal-shielded-pool, studied at `eb1bc0e7`
+
+The withdrawal's public-input compression follows its use of the hybrid scheme from [eprint 2025/1500](https://eprint.iacr.org/2025/1500): `alpha = keccak256(statement) mod r` computed by the pool, `beta = Poseidon(statement)` as a circuit output, and `gamma`, the statement as a polynomial at `alpha + beta`, with the verifier's order `[beta, gamma, alpha]` and every statement value range-checked by the pool. Adapted, not copied: our statement is seven values rather than eleven, `beta` travels after the proof in the frame transaction's signature rather than in the VERIFY frame's data, and the code is our own:
+- `packages/circuits/circuits/withdraw.circom` (the compression block)
+- `packages/contracts/script/gen-validator.mjs` (the validator's `alpha`, `beta` and `gamma`)
+- `packages/sdk/src/compression.ts`
+
 ## Dependencies with licenses to note
 - **circomlib** (**GPL-3.0**): its templates are compiled into the circuits, which is why this project is GPL-3.0.
 - **@forshtat/hegota-support** (MIT): frame transaction codec and wire format.

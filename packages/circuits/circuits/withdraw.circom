@@ -2,6 +2,8 @@
 // Adapted from 0xbow Privacy Pools (packages/circuits/circuits/withdraw.circom). See NOTICE.md.
 // Changed: `context` is replaced by the frame transaction's sigHash, the state root is bound to the leaf count
 // (for the k-gate), the k-gate is new, and ASP membership applies only when aspRoot is non-zero.
+// The statement is compressed to three public signals with the hybrid scheme of eprint 2025/1500, as
+// minimal-shielded-pool does it (see NOTICE.md and packages/sdk/src/compression.ts).
 pragma circom 2.2.0;
 
 include "comparators.circom";
@@ -11,7 +13,8 @@ include "commitment.circom";
 include "leanImt.circom";
 
 template Withdraw(maxDepth) {
-  // Public. The order is the order the on-chain validator feeds the verifier.
+  // The statement: seven values, private here. The validator reads them from the transaction, range-checks each one,
+  // and hashes them in this order into alpha.
   signal input rootCommit;       // Poseidon(treeRoot, leafCount), published by the pool as an EIP-8272 recent root
   signal input nullifierHash;    // the EIP-8250 nonce key of this transaction
   signal input changeCommitment; // the note holding what is left
@@ -19,6 +22,12 @@ template Withdraw(maxDepth) {
   signal input sigHash;          // sigHash mod r: commits the recipient, the fee and every frame
   signal input k;                // at least k leaves were inserted after the spent note (0 turns the gate off)
   signal input aspRoot;          // 0 when the pool has no association set
+
+  // Public: the one input. alpha = keccak256(the seven values as 32-byte words) mod r, computed by the validator.
+  signal input alpha;
+  // Public outputs. circom puts outputs first, so the verifier's order is [beta, gamma, alpha].
+  signal output beta;   // Poseidon(the seven values)
+  signal output gamma;  // the seven values as a polynomial, evaluated at alpha + beta
 
   // Private.
   signal input value;
@@ -94,8 +103,20 @@ template Withdraw(maxDepth) {
   aspInclusion.siblings <== aspSiblings;
   (aspInclusion.out - aspRoot) * (1 - aspOff.out) === 0;
 
-  // 7. Keep sigHash in the constraint system.
-  signal sigHashSquared <== sigHash * sigHash;
+  // 7. Compression. beta binds the statement inside the proof; gamma = x0 + x1*s + ... + x6*s^6 at s = alpha + beta,
+  // by Horner, binds it to the alpha the validator computed from what the transaction actually carries.
+  var n = 7;
+  signal x[n] <== [rootCommit, nullifierHash, changeCommitment, withdrawnValue, sigHash, k, aspRoot];
+  component statementHash = Poseidon(n);
+  statementHash.inputs <== x;
+  beta <== statementHash.out;
+  signal s <== alpha + beta;
+  signal horner[n];
+  horner[0] <== x[n - 1];
+  for (var i = 1; i < n; i++) {
+    horner[i] <== horner[i - 1] * s + x[n - 1 - i];
+  }
+  gamma <== horner[n - 1];
 }
 
-component main { public [rootCommit, nullifierHash, changeCommitment, withdrawnValue, sigHash, k, aspRoot] } = Withdraw(20);
+component main { public [alpha] } = Withdraw(20);

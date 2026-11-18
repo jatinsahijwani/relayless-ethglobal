@@ -2,6 +2,9 @@
 
 *Written 2026-11-16 on branch `refocus`. Every claim about the EIPs, minimal-shielded-pool, the clients and the networks was checked against the live source that day. The sources are listed at the end.*
 
+## Status after Stage 3 Part B (2026-11-17)
+- **Compression done** (step H): the withdrawal statement is 3 public signals. On `hegota-8141` the pool VERIFY frame uses 207,913 and 268,100 is declared, under Nethermind's 300,000. See `docs/gas-report.md` and `DECISIONS.md`. The figures below are from before it.
+
 ## Status after Part 4
 - **Built:** `devnet-8421` and `hegota-8141`, behind the profile table, as the author decided. `eips-current` waits: why, and what adding it takes, is in `DECISIONS.md`.
 - **Measured,** replacing the §4 estimates: the recent-root frame is 5,579 gas, the pool VERIFY frame 233,383, so 238,962 of validation is used, and 308,100 is declared. See `docs/gas-report.md`.

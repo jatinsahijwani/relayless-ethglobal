@@ -10,7 +10,8 @@ import { encodeFunctionData, numberToHex, parseEther, type Address, type Hex } f
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
 import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
-import { DRY_RUN_LIMITS, EMPTY_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeProof, rawOf, refsOf, sigHashOf, toWire, verifyIndex, type FrameTx, type RootRef } from "./frame.js";
+import { compressedPublics, type WithdrawStatement } from "./compression.js";
+import { DRY_RUN_LIMITS, EMPTY_PROOF, EMPTY_WITHDRAW_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeProof, encodeWithdrawProof, rawOf, refsOf, sigHashOf, toWire, verifyIndex, type FrameTx, type RootRef } from "./frame.js";
 import type { FrameLimits } from "./frame.js";
 import { profileOf, type Profile, type ProfileId } from "./profiles.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
@@ -524,19 +525,24 @@ export class Relayless {
     const base = { pool: this.o.pool, chainId: this.chainId, recipient: opts.to, amount: opts.amount, changeCommitment, nullifierHash: note.nullifierHash, k, refs: asp ? [ref, asp.ref] : [ref], ...caps };
 
     // Fee = the most this can cost, rounded up. The unused part comes back to the recipient from frame 2.
-    const fee = ((await this.maxCostOf(buildWithdrawal(this.profile, { ...base, fee: opts.amount }, EMPTY_PROOF, limits))) * 101n) / 100n;
+    const fee = ((await this.maxCostOf(buildWithdrawal(this.profile, { ...base, fee: opts.amount }, EMPTY_WITHDRAW_PROOF, limits))) * 101n) / 100n;
     if (fee >= opts.amount) throw new Error(`the amount must be above the refundable gas deposit of ${fee} wei`);
     await this.checkSolvency(fee, opts.amount - fee, alsoReserved);
 
     const params = { ...base, fee };
+    const statement: WithdrawStatement = {
+      rootCommit: BigInt(ref.root),
+      nullifierHash: note.nullifierHash,
+      changeCommitment,
+      withdrawnValue: opts.amount,
+      sigHash: BigInt(sigHashOf(this.profile, buildWithdrawal(this.profile, params, "0x", limits))) % R,
+      k,
+      aspRoot: asp ? BigInt(asp.ref.root) : 0n,
+    };
+    const [beta, gamma, alpha] = compressedPublics(statement);
     const input = {
-      rootCommit: BigInt(ref.root).toString(),
-      nullifierHash: note.nullifierHash.toString(),
-      changeCommitment: changeCommitment.toString(),
-      withdrawnValue: opts.amount.toString(),
-      sigHash: (BigInt(sigHashOf(this.profile, buildWithdrawal(this.profile, params, "0x", limits))) % R).toString(),
-      k: k.toString(),
-      aspRoot: asp ? BigInt(asp.ref.root).toString() : "0",
+      ...Object.fromEntries(Object.entries(statement).map(([key, v]) => [key, v.toString()])),
+      alpha: alpha.toString(),
       value: note.value.toString(),
       label: note.label.toString(),
       nullifier: note.nullifier.toString(),
@@ -551,9 +557,11 @@ export class Relayless {
       aspSiblings: asp ? asp.siblings.map(String) : Array(TREE_DEPTH).fill("0"),
     };
     const t = Date.now();
-    const { proof } = await this.o.prover.prove("withdraw", input);
+    const { proof, publicSignals } = await this.o.prover.prove("withdraw", input);
     const proveMs = Date.now() - t;
-    return { tx: buildWithdrawal(this.profile, params, encodeProof(proof), limits), fee, proveMs };
+    // The circuit and this SDK must agree on the statement's order and encoding; a mismatch would only show as a refusal.
+    if (publicSignals.map(BigInt).join() !== [beta, gamma, alpha].join()) throw new Error("the prover's public signals don't match the compressed statement");
+    return { tx: buildWithdrawal(this.profile, params, encodeWithdrawProof(proof, beta), limits), fee, proveMs };
   }
 
   /** Simulates first: a transaction that would fail must never be broadcast. */

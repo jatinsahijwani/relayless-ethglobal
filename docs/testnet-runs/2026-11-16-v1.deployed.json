@@ -1,0 +1,13 @@
+{
+  "name": "hegota-8141",
+  "profile": "hegota-8141",
+  "chainId": 8141,
+  "rpc": "https://rpc1.privacy.ethrex.xyz",
+  "explorer": "https://dora.privacy.ethrex.xyz",
+  "reserveEth": "0.02",
+  "pool": "0x6d58de3fc7d80705ef2077b1d3b6aef1e87bb225",
+  "validator": "0x72fb50da9fe63c68bf886ffc1e6a97e9d097421c",
+  "poseidonT3": "0xd194af1a6891ec6f6e34c961ed2639b430c0ff84",
+  "poseidonT4": "0x308c0bee488fa6be3b7ce828135999cf56a2f256",
+  "feeRange": null
+}

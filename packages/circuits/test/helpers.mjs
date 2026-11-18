@@ -1,4 +1,5 @@
-import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite";
+import { concat, keccak256, toHex } from "viem";
+import { poseidon7, poseidon1, poseidon2, poseidon3 } from "poseidon-lite";
 
 export const D = 20;
 export const pad = (a, n = D) => [...a, ...Array(n - a.length).fill(0n)].slice(0, n);
@@ -78,4 +79,18 @@ export function scenario({ size = 8, index = 2, value = 1000n, withdrawn = 400n,
     _leaves: leaves,
   };
 }
-export const inputs = ({ _leaves, ...w }) => w;
+
+// Hybrid compression (eprint 2025/1500): the same definitions as packages/sdk/src/compression.ts.
+export const R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export const statementOf = (w) => [w.rootCommit, w.nullifierHash, w.changeCommitment, w.withdrawnValue, w.sigHash, w.k, w.aspRoot].map(BigInt);
+/** The validator's alpha over the raw 32-byte words, so a test can feed it an aliased (value + r) word. */
+export const alphaOf = (words) => BigInt(keccak256(concat(words.map((x) => toHex(x, { size: 32 }))))) % R;
+export const fingerprint = (sigma, words) => words.reduceRight((acc, x) => (acc * sigma + x) % R, 0n);
+export function publicsOf(words) {
+  const alpha = alphaOf(words);
+  const beta = poseidon7(words.map((x) => x % R));
+  return [beta, fingerprint((alpha + beta) % R, words.map((x) => x % R)), alpha];
+}
+
+/** The circuit's input: the witness plus alpha, computed from `words` (the statement itself unless a test aliases it). */
+export const inputs = ({ _leaves, ...w }, words = statementOf(w)) => ({ ...w, alpha: alphaOf(words) });

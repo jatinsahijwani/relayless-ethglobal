@@ -18,7 +18,10 @@ const SCOPE_EXECUTION_AND_PAYMENT = 3;
 const ARBITRARY = 0;
 
 export const LIMITS = {
-  verifyExecution: 300_000n,
+  // Declared, and counted against a node's verify budget. Worst case used: about 240,000 (a devnet-8421 ragequit, which
+  // pays the nullifier key's 20,000 first use here). With the 8,000 root frame and the signature, hegota-8141 declares
+  // 268,100, under Nethermind's 300,000 default. A VERIFY frame that ran out would only make the transaction invalid.
+  verifyExecution: 260_000n,
   senderExecution: 1_500_000n, // must be at least the validator's minimum
   senderState: 1_000_000n, // must be at least the validator's minimum
   refundExecution: 150_000n,
@@ -68,6 +71,8 @@ export interface RagequitParams {
 }
 
 export const EMPTY_PROOF: Hex = `0x${"00".repeat(256)}`;
+/** A withdrawal's signature is the proof followed by the compression's beta: 288 bytes. */
+export const EMPTY_WITHDRAW_PROOF: Hex = `0x${"00".repeat(288)}`;
 
 const frame = (mode: number, f: { flags?: number; target: Address | null; execution: bigint; state?: bigint; data?: Hex }): Frame => ({
   mode,
@@ -101,7 +106,7 @@ function assemble(profile: Profile, p: { pool: Address; chainId: number; nullifi
   };
 }
 
-export function buildWithdrawal(profile: Profile, p: WithdrawalParams, proof: Hex = EMPTY_PROOF, limits: FrameLimits = LIMITS): FrameTx {
+export function buildWithdrawal(profile: Profile, p: WithdrawalParams, proof: Hex = EMPTY_WITHDRAW_PROOF, limits: FrameLimits = LIMITS): FrameTx {
   const body = [
     frame(MODE.SENDER, {
       target: p.pool,
@@ -149,6 +154,9 @@ export function encodeProof(proof: any): Hex {
   const w = (v: string) => toHex(BigInt(v), { size: 32 });
   return concat([w(proof.pi_a[0]), w(proof.pi_a[1]), w(proof.pi_b[0][1]), w(proof.pi_b[0][0]), w(proof.pi_b[1][1]), w(proof.pi_b[1][0]), w(proof.pi_c[0]), w(proof.pi_c[1])]);
 }
+
+/** A withdrawal's 288-byte signature: the proof, then beta (see compression.ts). */
+export const encodeWithdrawProof = (proof: any, beta: bigint): Hex => concat([encodeProof(proof), toHex(beta, { size: 32 })]);
 
 /** Kept for callers written before profiles: the devnet profile. */
 export const DEVNET = PROFILES["devnet-8421"];

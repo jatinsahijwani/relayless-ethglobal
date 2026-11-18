@@ -7,5 +7,6 @@ export * from "./tree.js";
 export { RECENT_ROOT_ADDRESS, RECENT_ROOT_WINDOW, checkRecentRoot, recentRootKey, recentRootValue, type RootCheck } from "./recent-root.js";
 export { POOL_ABI, RpcError, fetchPoolState, nonceSettled } from "./chain.js";
 export type { PoolState, DepositEvent, WithdrawEvent } from "./chain.js";
-export { LIMITS, buildWithdrawal, buildRagequit, encodeProof, encodeRootTuples, refsOf, rawOf, sigHashOf, txHashOf, type RootRef, type FrameTx } from "./frame.js";
+export { LIMITS, buildWithdrawal, buildRagequit, encodeProof, encodeWithdrawProof, encodeRootTuples, refsOf, rawOf, sigHashOf, txHashOf, type RootRef, type FrameTx } from "./frame.js";
 export { PROFILES, DEFAULT_PROFILE, profileOf, type Profile, type ProfileId } from "./profiles.js";
+export * from "./compression.js";

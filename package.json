@@ -25,12 +25,13 @@
     "typecheck": "tsc -p packages/sdk && tsc -p apps/asp && tsc -p apps/web && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {
+    "@forshtat/hegota-support": "0.0.1",
+    "@relayless/sdk": "workspace:*",
+    "@types/node": "^22.0.0",
     "playwright": "1.61.1",
+    "snarkjs": "0.7.6",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.0.0",
-    "viem": "^2.57.7",
-    "@relayless/sdk": "workspace:*",
-    "@forshtat/hegota-support": "0.0.1"
+    "viem": "^2.57.7"
   }
 }
