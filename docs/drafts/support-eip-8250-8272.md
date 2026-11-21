@@ -1,44 +1,60 @@
 # Drafts: support for EIP-8250 and EIP-8272 in Hegotá
 
-**Not posted.** Two short posts for the author to review and send, one per Ethereum Magicians thread. Both EIPs are listed as "Considered for Inclusion" in EIP-8081 (checked 2026-11-17); EIP-8141 is "Scheduled".
+**Not posted.** Two posts, one per Ethereum Magicians thread, each under 200 words. EIP-8081 lists both as "Considered for Inclusion" and EIP-8141 as "Scheduled" (checked 2026-11-17).
 
-Every number below is from our own runs on chain 8141 (`hegota-8141` profile) or our local chains, with links. Update them if a newer run replaces them.
+| Post | Where | Order |
+|---|---|---|
+| EIP-8250 | Reply at the bottom of https://ethereum-magicians.org/t/eip-8250-keyed-nonces-for-frame-transactions/28437 | **3rd of 5.** Day 2, the day after the MATCHA reply |
+| EIP-8272 | Reply at the bottom of https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621 | **4th of 5.** Day 3 |
 
----
+The ethresear.ch post follows on day 5.
+
+Every number is from chain 8141 (the `hegota-8141` profile, ethrex `64b8fc09`) unless marked local.
 
 ## 1. EIP-8250 (Keyed Nonces for Frame Transactions)
-Thread: https://ethereum-magicians.org/t/eip-8250-keyed-nonces-for-frame-transactions/28437
+---
 
-> **Support for Hegotá, from a working user on chain 8141**
->
-> [Relayless](https://github.com/jatinsahijwani/relayless-ethglobal) is a privacy pool on frame transactions where the pool is the sender and pays gas from the note being withdrawn, so a wallet holding 0 ETH can receive a private payment with no relayer. Keyed nonces are what make that design possible. Each withdrawal's nullifier hash *is* its EIP-8250 nonce key, at sequence 0:
->
-> - **Double spends are refused by the protocol, before broadcast.** On chain 8141, a second withdrawal of a spent note was refused by the node's own simulation with `Nonce mismatch: expected 1, got 0`, and nothing was sent ([run](https://github.com/jatinsahijwani/relayless-ethglobal#public-testnet)). The pool needs no nullifier storage read in validation for this.
-> - **Many users share one sender without waiting for each other.** Three withdrawals from the one pool sender, on three keys, were pending at once on chain 8141 and mined in the same block ([`0x7dabc6e6…`](https://dora.privacy.ethrex.xyz/tx/0x7dabc6e6d7d93be1e2a589f1458b0cce291cc8589b9eef7d19daadc134181e1b), [`0x1d02aa24…`](https://dora.privacy.ethrex.xyz/tx/0x1d02aa2465ea150ef9dded3c163d8515efb359d10a779ae604b0aaa39d9e62d4), [`0x8e87a405…`](https://dora.privacy.ethrex.xyz/tx/0x8e87a40519350a210841ea1c2c6c56f2914b92da6411c2807819f5d121ad5f7f)). Without keyed nonces, a shared sender is one pending transaction at a time.
-> - **The cost is visible and reasonable:** 97,920 state gas for the key's first use, inside a 916,820-gas withdrawal.
->
-> Without EIP-8250, a pool either keeps nullifiers in its own storage (which validation can't read without breaking concurrency) or needs a relayer. We'd like to see it scheduled with EIP-8141.
->
-> One data point for the discussion of shared senders: a key consumed on chain also proves that the sender *did* get a transaction included, which matters for how mempools account for evicted conflicts. We've written that up for the ERC-8421 sidecar and will link it.
+**Support for Hegotá, from a working user on chain 8141**
+
+[Relayless](https://github.com/jatinsahijwani/relayless-ethglobal) is a privacy pool where the pool is the frame transaction's sender and pays gas from the note being withdrawn, so a wallet holding 0 ETH can be paid privately without a relayer. Each withdrawal's nullifier hash is its EIP-8250 nonce key.
+
+On chain 8141:
+
+- **A double spend is refused by the protocol.** The node's simulation refused a second withdrawal of a spent note with `Nonce mismatch: expected 1, got 0`, and nothing was broadcast.
+- **One sender serves many users at once.** Three withdrawals on three keys were pending together and mined in block 859307 ([1](https://dora.privacy.ethrex.xyz/tx/0x7dabc6e6d7d93be1e2a589f1458b0cce291cc8589b9eef7d19daadc134181e1b), [2](https://dora.privacy.ethrex.xyz/tx/0x1d02aa2465ea150ef9dded3c163d8515efb359d10a779ae604b0aaa39d9e62d4), [3](https://dora.privacy.ethrex.xyz/tx/0x8e87a40519350a210841ea1c2c6c56f2914b92da6411c2807819f5d121ad5f7f)).
+- **The cost is clear:** 97,920 state gas for the key's first use, inside a 916,820-gas withdrawal.
+
+One detail: ethrex lets keyed transactions from one sender be pending together only when the sender's validation reads none of its own storage. Without keyed nonces, the pool would need nullifier storage in validation, or a relayer. I'd like to see EIP-8250 scheduled with EIP-8141.
 
 ---
 
 ## 2. EIP-8272 (Recent Roots for Frame Transactions)
-Thread: https://ethereum-magicians.org/t/eip-8272-recent-roots-for-frame-transactions/28621
+---
 
-> **Support for Hegotá, from a working user on chain 8141**
->
-> [Relayless](https://github.com/jatinsahijwani/relayless-ethglobal), a privacy pool on frame transactions, takes its Merkle root from an EIP-8272 recent-root frame on chain 8141, and its validation reads no storage at all. That's what lets one pool sender serve many users at once:
->
-> - **The root frame is cheap:** 5,579 gas for one root, 8,010 for two (the second is an association set's root), measured on chain 8141 and on a local ethrex `64b8fc09` chain.
-> - **Pending withdrawals survive new deposits.** On local ethrex `64b8fc09` and `247e2dd2` chains, six prepared withdrawals all stayed valid after a deposit (a new root), after another withdrawal landed (a new root, a balance change and a consumed key), and after 20 more blocks. A static check of our validator finds no reachable `SLOAD`, `BALANCE`, `EXTCODE*`, `TIMESTAMP` or `NUMBER`: only calls to the pure BN254 precompiles. Mass invalidation through the pool's state isn't possible, because validation doesn't read it. [Results](https://github.com/jatinsahijwani/relayless-ethglobal/tree/main/research/shared-sender).
-> - **It composes with compliance.** Our association-set pools carry a second tuple for the approved set's root, from the same contract, so the set's provider never touches the pool's validation.
->
-> Without recent roots, a privacy pool has to read its root from its own storage in validation, which ties every pending withdrawal to the next deposit. We'd like to see EIP-8272 scheduled with EIP-8141.
+**Support for Hegotá, from a working user on chain 8141**
+
+[Relayless](https://github.com/jatinsahijwani/relayless-ethglobal), a privacy pool on frame transactions, takes its Merkle root from an EIP-8272 recent-root frame on chain 8141, so its validation reads no storage at all. On Alex's question from July: yes, the frame form gives a privacy pool what it needs. The root frame goes first, and the pool's validator checks it and reads the tuples with `FRAMEPARAM` and `FRAMEDATALOAD`.
+
+- **The frame is cheap:** 5,579 gas for one root on chain 8141 ([tx](https://dora.privacy.ethrex.xyz/tx/0x543a9ad335af2202d696d9bdae7c242c30f952f44f06b9eb512dbdfc24236ed8)). With two roots, the second being an association set's, it's 8,010 (local).
+- **Pending withdrawals survive new deposits.** On local ethrex `64b8fc09` and `247e2dd2` chains, six prepared withdrawals all stayed valid after a deposit published a new root, after another withdrawal landed, and after 20 more blocks.
+- **That's what makes concurrency safe.** Three withdrawals from the one pool sender were pending together on chain 8141 and mined in one block.
+- **It composes with compliance:** an association set's root rides in the same frame.
+
+Without recent roots, every deposit could invalidate every pending withdrawal. [Results](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md). I'd like to see EIP-8272 scheduled with EIP-8141.
 
 ---
 
-## Notes for the author
-- **The README link** to the `research/shared-sender` results works only once that branch is merged to `main`. Until then, link the PR instead.
-- **Tone check:** both posts state what we built and measured, and ask only for scheduling. Neither claims the pool design is ours: it follows soispoke's minimal-shielded-pool, which already uses both EIPs. If you want to say so explicitly, add: "The pool design follows soispoke's minimal-shielded-pool; we add an association-set layer and the alt mempool path."
-- If either thread has moved on to a specific open question (for example the recent-root window length, or key scoping to the payer), answer that instead of posting general support.
+## Notes
+- **Word counts** (the text between the `---` lines, heading included, link targets excluded): EIP-8250 is 179, EIP-8272 is 195. Recount after any edit.
+- **Sources:**
+  - Block 859307 and the three transactions: README "Public testnet", 2026-11-17 run.
+  - 97,920 and 916,820: the chain 8141 withdrawal receipt.
+  - 5,579: the same receipt's root frame.
+  - 8,010: `docs/gas-report.md`, local `hegota-8141`.
+  - The six-withdrawal check: `research/shared-sender/RESULTS.md` §4.
+  - The ethrex concurrency rule: `KeyedConcurrency` in `crates/blockchain/mempool.rs` at `64b8fc09`, read 2026-11-22.
+- **Neither post claims the pool design.** It follows soispoke's minimal-shielded-pool, which uses both EIPs. If you want to say so, add: "The pool design follows soispoke's minimal-shielded-pool."
+- **Thread state, re-read 2026-11-22.**
+  - EIP-8250: latest post 2026-10-23. Ankushin's open question there (keyed sequences in `NONCE_MANAGER` or in the sender's own storage) isn't one our data answers.
+  - EIP-8272: latest post 2026-07-17. Alex Forshtat (the ERC-8421 sidecar's author) asked whether a recent-root validation frame gives a privacy pool everything it needs, and soispoke replied that it could work. The post answers him with a working pool.
+- **If either thread has moved on** to another open question by posting day, answer that instead.
