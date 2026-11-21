@@ -4,14 +4,18 @@
 //  - proofs always use the latest committed root, which has the longest life left;
 //  - fees are generous, with the unused part refunded by a DEFAULT frame;
 //  - the pool's solvency is checked before anything is sent;
-//  - the transaction is simulated before it is broadcast;
+//  - the transaction is simulated before it is broadcast (frame-tx-sdk refuses to send otherwise);
 //  - a nullifier is never sent twice, except as a fee bump replacing the pending transaction.
+//
+// Building, simulating, sending and the fee-bump arithmetic are frame-tx-sdk's. What's here is the pool: notes, proofs,
+// roots, solvency and the in-flight ledger.
 import { encodeFunctionData, numberToHex, parseEther, type Address, type Hex } from "viem";
 import { POOL_ABI, RpcError, fetchPoolState, rpc, type PoolState, type RootEvent } from "./chain.js";
 import { anonymity, type AnonymityReport } from "./anonymity.js";
-import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nonceSlot, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
+import { R, changeSecrets, commitment, depositSecrets, freshAccount, masterFromSignature, nullifierHash as hashNullifier, precommitment, seedTypedData, type NoteSecrets } from "./crypto.js";
 import { compressedPublics, type WithdrawStatement } from "./compression.js";
-import { DRY_RUN_LIMITS, EMPTY_PROOF, EMPTY_WITHDRAW_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeProof, encodeWithdrawProof, rawOf, refsOf, sigHashOf, toWire, verifyIndex, type FrameTx, type RootRef } from "./frame.js";
+import { DRY_RUN_LIMITS, EMPTY_PROOF, EMPTY_WITHDRAW_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeProof, encodeWithdrawProof, rawOf, refsOf, sigHashOf, type FrameTx, type RootRef } from "./frame.js";
+import { BroadcastRefusedError, bumpFees, fetchClient, isNonceKeyConsumed, sendFrameTransaction, simulateFrameAdmission, type AdmissionResult, type FrameTransaction, type RequestClient } from "frame-tx-sdk";
 import type { FrameLimits } from "./frame.js";
 import { profileOf, type Profile, type ProfileId } from "./profiles.js";
 import { MemoryStore, type InFlightStore } from "./store.js";
@@ -126,8 +130,8 @@ const FEE_HEADROOM = 10n;
 /** The lowest default max fee: generous, because the unused part is refunded. Not a limit. */
 const DEFAULT_MIN_MAX_FEE = 1_000_000_000n;
 const PRIORITY_FEE = 1_000_000n;
-/** Replacements must raise both fees by at least 10%. Slightly more, to survive integer rounding. */
-const BUMP_PERCENT = 125n;
+/** Replacements must raise both fees by at least 10%. Relayless asks 25%, so one bump is enough more often. */
+const BUMP_PERCENT = 25;
 /** Generous fees mean a bump should be rare; a bump costs the pool reputation, so it is not the first response. */
 const MIN_PENDING_BEFORE_BUMP_MS = 120_000;
 const PREFLIGHT_RETRIES = 5;
@@ -161,18 +165,25 @@ export class Relayless {
   private aspSourceChecked = false;
   private chainId = 0;
   readonly profile: Profile;
+  /** The chain node, for simulation and reads. Sends each request once. */
+  private node: RequestClient;
+  /** Where withdrawals go: the alt mempool (sidecar) on devnet-8421, the node's public mempool on hegota-8141. */
+  private mempoolClient: RequestClient;
 
   private constructor(private o: ConnectOptions) {
     this.store = o.store ?? new MemoryStore();
     this.profile = profileOf(o.profile);
-  }
-
-  private get mempool(): string {
-    return this.o.mempool ?? this.o.rpc;
+    this.node = fetchClient(o.rpc);
+    this.mempoolClient = fetchClient(o.mempool ?? o.rpc);
   }
 
   private simulate(tx: FrameTx): Promise<any> {
     return rpc(this.o.rpc, "ethrex_simulateFrameTransaction", this.profile.simulateParams(rawOf(this.profile, tx)));
+  }
+
+  /** frame-tx-sdk checks a transaction's profile tag against its codec. */
+  private tagged(tx: FrameTx): FrameTransaction {
+    return { ...tx, profile: this.profile.id } as FrameTransaction;
   }
 
   static async connect(o: ConnectOptions): Promise<Relayless> {
@@ -272,7 +283,7 @@ export class Relayless {
   }
 
   async isSpent(nh: bigint): Promise<boolean> {
-    return BigInt(await rpc(this.o.rpc, "eth_getStorageAt", [this.profile.nonceManager, nonceSlot(this.o.pool, nh), "latest"])) !== 0n;
+    return isNonceKeyConsumed(this.node, this.profile.sdk, { sender: this.o.pool, key: nh });
   }
 
   async balance(): Promise<bigint> {
@@ -320,7 +331,9 @@ export class Relayless {
 
   /** What the transaction escrows from the pool at APPROVE. The fee must cover it. */
   private async maxCostOf(tx: FrameTx): Promise<bigint> {
-    return BigInt((await this.simulate(tx)).maxCost);
+    const sim = await simulateFrameAdmission(this.node, this.tagged(tx), { via: "ethrex" });
+    if (sim.maxCost === undefined) throw new Error(`the node gave no maxCost: ${sim.reason ?? "no reason"}`);
+    return sim.maxCost;
   }
 
   /**
@@ -381,12 +394,12 @@ export class Relayless {
     for (const [i, p] of payments.entries()) {
       if (free[i].value < p.amount) throw new Error("a note doesn't cover its payment");
       const { tx, fee, proveMs } = await this.prepare(free[i], p, 0n, state, caps, LIMITS, reserved);
-      await this.preflight(tx);
+      const admission = await this.preflight(tx);
       reserved += p.amount;
-      ready.push({ tx, fee, proveMs, note: free[i], p });
+      ready.push({ tx, fee, proveMs, note: free[i], p, admission });
     }
-    return Promise.all(ready.map(async ({ tx, fee, proveMs, note, p }) => {
-      const hash = await this.submit(tx, note.nullifierHash, caps, p.amount);
+    return Promise.all(ready.map(async ({ tx, fee, proveMs, note, p, admission }) => {
+      const hash = await this.submit(tx, note.nullifierHash, caps, p.amount, admission);
       return { hash, nullifierHash: note.nullifierHash, recipient: p.to, amount: p.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
     }));
   }
@@ -410,26 +423,27 @@ export class Relayless {
     const sim = await this.simulate(tx);
     const verifyGasUsed = sim.frames?.[0]?.gasUsed ? BigInt(sim.frames[0].gasUsed) : null;
 
+    // The sidecar's estimate, and the pool's reputation there, through frame-tx-sdk.
+    let estimate: AdmissionResult | null = null;
     let reason: string | null = null;
-    let estimate: any = null;
     try {
-      estimate = await rpc(this.mempool, "eth_estimateFrameTransactionGas", [toWire(tx)]);
+      estimate = await simulateFrameAdmission(this.node, this.tagged(tx), { via: "sidecar", sidecar: this.mempoolClient });
+      reason = estimate.admitted ? null : estimate.reason;
     } catch (e) {
       reason = e instanceof Error ? e.message : String(e);
     }
-    const reputation = await rpc(this.mempool, "skandha_explorer_listReputation", [{ limit: 200 }]).catch(() => null);
-    const entry = reputation?.items?.find((x: any) => x.address?.toLowerCase() === this.o.pool.toLowerCase());
-    const staked: boolean | null = entry ? Boolean(entry.isStaked) : null;
+    const entry = estimate?.reputation?.listed ? estimate.reputation : null;
+    const staked: boolean | null = entry ? Boolean(entry.staked) : null;
     return {
       verifyGasDeclared: DRY_RUN_LIMITS.verifyExecution,
       canonical: { admitted: Boolean(sim.canonicalMempoolValid), reason: sim.canonicalMempoolViolation ?? null, verifyGasUsed },
       alt: {
-        admitted: estimate !== null,
+        admitted: Boolean(estimate?.admitted),
         reason,
         entity: this.o.pool,
-        stake: entry ? BigInt(entry.stake) : null,
+        stake: entry?.stake ?? null,
         staked,
-        reputation: entry ? { seen: entry.opsSeen, included: entry.opsIncluded, status: entry.status } : null,
+        reputation: entry ? { seen: entry.seen!, included: entry.included!, status: entry.status! } : null,
         budget: staked === null ? null : staked ? STAKED_BUDGET : UNSTAKED_BUDGET,
         verifyGasUsed,
       },
@@ -466,22 +480,17 @@ export class Relayless {
       throw new Error("that withdrawal has already landed");
     }
     const caps = await this.feeCaps();
-    const bump = (old: string, floor: bigint) => {
-      const raised = (BigInt(old) * BUMP_PERCENT) / 100n;
-      return raised > floor ? raised : floor;
-    };
-    const maxFeePerGas = bump(pending.maxFeePerGas, caps.maxFeePerGas);
-    if (this.o.feeRange && maxFeePerGas > this.o.feeRange.max) throw new Error("this withdrawal has reached the pool's highest fee: it can only wait");
-    return this.send(note, { to: handle.recipient, amount: handle.amount }, 0n, this.state!, {
-      maxFeePerGas,
-      maxPriorityFeePerGas: bump(pending.maxPriorityFeePerGas, caps.maxPriorityFeePerGas),
-    });
+    // frame-tx-sdk's replacement arithmetic: both caps up by at least BUMP_PERCENT, and at least what the market needs.
+    // Re-proving happens in send(), because the fees are inside the sigHash the proof commits to.
+    const bumped = bumpFees({ maxFeePerGas: BigInt(pending.maxFeePerGas), maxPriorityFeePerGas: BigInt(pending.maxPriorityFeePerGas) }, { minPercent: BUMP_PERCENT, floor: caps });
+    if (this.o.feeRange && bumped.maxFeePerGas > this.o.feeRange.max) throw new Error("this withdrawal has reached the pool's highest fee: it can only wait");
+    return this.send(note, { to: handle.recipient, amount: handle.amount }, 0n, this.state!, bumped);
   }
 
   private async send(note: Note, opts: WithdrawOptions, k: bigint, state: PoolState, caps: FeeCaps): Promise<WithdrawHandle> {
     const { tx, fee, proveMs } = await this.prepare(note, opts, k, state, caps);
-    await this.preflight(tx);
-    const hash = await this.submit(tx, note.nullifierHash, caps, opts.amount);
+    const admission = await this.preflight(tx);
+    const hash = await this.submit(tx, note.nullifierHash, caps, opts.amount, admission);
     return { hash, nullifierHash: note.nullifierHash, recipient: opts.to, amount: opts.amount, fee, proveMs, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
   }
 
@@ -564,41 +573,35 @@ export class Relayless {
     return { tx: buildWithdrawal(this.profile, params, encodeWithdrawProof(proof, beta), limits), fee, proveMs };
   }
 
-  /** Simulates first: a transaction that would fail must never be broadcast. */
-  private async preflight(tx: FrameTx): Promise<void> {
-    // On a public mempool profile, `valid` is the node's own admission verdict for the validation prefix. On devnet-8421
-    // the canonical rules reject every withdrawal (MAX_VERIFY_GAS), so only execution counts there.
-    const problem = (sim: any): string | null =>
-      sim.executionError ?? (this.profile.submit === "public-mempool" && sim.valid === false ? sim.violation ?? "not valid" : null);
-    let sim = await this.simulate(tx);
+  /**
+   * Simulates first: a transaction that would fail must never be broadcast. frame-tx-sdk's admission verdict: on a
+   * public-mempool profile, the node's own frame-specific gates; on devnet-8421 the canonical rules reject every
+   * withdrawal (MAX_VERIFY_GAS) and the sidecar decides, so only execution counts. Either way every frame up to and
+   * including SENDER must succeed; a refund frame after it costs nothing but the refund.
+   */
+  private async preflight(tx: FrameTx): Promise<AdmissionResult> {
     // ethrex treats a root from the current slot as transient, and a young chain can show it after the head has moved
     // on. Nothing has been broadcast, so waiting a few slots costs no reputation.
-    for (let i = 0; i < PREFLIGHT_RETRIES && /not yet referenceable|not before the current slot|slot .*not (yet )?(recent|referenceable)|RecentRootSlotNotPast/i.test(problem(sim) ?? ""); i++) {
-      await new Promise((r) => setTimeout(r, PREFLIGHT_RETRY_MS));
-      sim = await this.simulate(tx);
-    }
-    const why = problem(sim);
-    if (why) {
+    const admission = await simulateFrameAdmission(this.node, this.tagged(tx), { via: "ethrex", retryTransient: { attempts: PREFLIGHT_RETRIES, delayMs: PREFLIGHT_RETRY_MS } });
+    if (!admission.admitted) {
       const head = await rpc(this.o.rpc, "eth_getBlockByNumber", ["latest", false]);
       const refs = refsOf(this.profile, tx).map((r) => r.slot).join(", ");
-      throw new NotAdmittedError(`simulation failed, not broadcast: ${why} (head slot ${BigInt(head.slotNumber)}, root slots ${refs})`);
+      throw new NotAdmittedError(`simulation failed, not broadcast: ${admission.reason} (head slot ${BigInt(head.slotNumber)}, root slots ${refs})`);
     }
-    // Everything up to and including the SENDER frame must succeed. A refund frame after it costs nothing but the refund.
-    const failed = (sim.frames ?? []).slice(0, verifyIndex(this.profile) + 2).findIndex((f: any) => !f.succeeded);
-    if (failed >= 0) throw new NotAdmittedError(`simulation failed at frame ${failed}, not broadcast`);
+    return admission;
   }
 
-  /** Sends once and records it. Never retries: if this throws, the transaction was refused, not lost. */
-  /** `reserved`: what a public mempool holds against the pool's balance while this is pending, its fee plus its payment. */
-  private async submit(tx: FrameTx, nh: bigint, caps: FeeCaps, reserved: bigint): Promise<Hex> {
+  /**
+   * Sends once, through frame-tx-sdk, which refuses unless `admission` admitted exactly these bytes, and records it.
+   * Never retries: if this throws NotAdmittedError, the transaction was refused, not lost.
+   * `reserved`: what a public mempool holds against the pool's balance while this is pending, its fee plus its payment.
+   */
+  private async submit(tx: FrameTx, nh: bigint, caps: FeeCaps, reserved: bigint, admission: AdmissionResult): Promise<Hex> {
     let hash: Hex;
     try {
-      hash =
-        this.profile.submit === "alt-mempool"
-          ? await rpc<Hex>(this.mempool, "eth_sendFrameTransaction", [toWire(tx)])
-          : await rpc<Hex>(this.mempool, "eth_sendRawTransaction", [rawOf(this.profile, tx)]);
+      ({ hash } = await sendFrameTransaction(this.node, this.tagged(tx), { admission, sidecar: this.mempoolClient, mempool: this.mempoolClient }));
     } catch (e) {
-      if (e instanceof RpcError) throw new NotAdmittedError(e.message);
+      if (e instanceof BroadcastRefusedError) throw new NotAdmittedError(e.message);
       throw e; // A network failure leaves the outcome unknown, so the caller must not assume it can resend.
     }
     this.store.set({ nullifierHash: nh.toString(), txHash: hash, sentAt: Date.now(), maxFeePerGas: caps.maxFeePerGas.toString(), maxPriorityFeePerGas: caps.maxPriorityFeePerGas.toString(), reserved: reserved.toString() });
@@ -663,8 +666,8 @@ export class Relayless {
       siblings: siblings(treeLeaves, note.leafIndex).map(String),
     });
     const tx = buildRagequit(this.profile, params, encodeProof(proof));
-    await this.preflight(tx);
-    const hash = await this.submit(tx, note.nullifierHash, caps, note.value);
+    const admission = await this.preflight(tx);
+    const hash = await this.submit(tx, note.nullifierHash, caps, note.value, admission);
     return { hash, nullifierHash: note.nullifierHash, recipient: note.depositor, amount: note.value, fee, proveMs: Date.now() - t, sentAt: Date.now(), wait: () => this.waitFor(hash, note.nullifierHash) };
   }
 
