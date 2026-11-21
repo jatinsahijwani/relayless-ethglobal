@@ -41,7 +41,7 @@ Nothing was posted, published or pushed outside our own repository. Decisions an
 | `scripts/alias.ts` | **6/6** | **6/6** | 6/6, 6/6 |
 | `pnpm typecheck`, `pnpm build` | clean | | clean |
 
-**PR:** PR_LINK. **CI will fail at install on GitHub,** because it can't see `../frame-tx-sdk`. That's expected until the SDK is published; see `DECISIONS.md`.
+**PR:** [#10](https://github.com/jatinsahijwani/relayless-ethglobal/pull/10). **CI will fail at install on GitHub,** because it can't see `../frame-tx-sdk`. That's expected until the SDK is published; see `DECISIONS.md`.
 
 **Things I noticed:**
 - **The devnet had stalled again** (head at slot 2,912, wall clock past 65,000), as in Stage 3. I restarted it from a new genesis with the script's own recipe; the old data was moved to `data.old.<time>`, not deleted.
