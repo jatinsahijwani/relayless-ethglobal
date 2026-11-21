@@ -57,6 +57,8 @@ Nothing was posted, published or pushed outside our own repository. Decisions an
 - admission and broadcasting through `host.provider` and `host.network`;
 - what upstreaming needs, and seven questions for the Kohaku team.
 
+**PRs:** [#11](https://github.com/jatinsahijwani/relayless-ethglobal/pull/11) (this part), [#12](https://github.com/jatinsahijwani/relayless-ethglobal/pull/12) (Parts 3–4), stacked on #10.
+
 **The prototype:** branch `relayless-frame-unshield` in the fork, 5 commits, **not pushed**. It's a new package, `@kohaku-eth/relayless`:
 - `createRelaylessPlugin`, with `prepareShield`, `prepareUnshield`, `balance` and `notes`;
 - `RelaylessBroadcaster implements Broadcaster`;
