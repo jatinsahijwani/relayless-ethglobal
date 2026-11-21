@@ -2,6 +2,52 @@
 
 Design choices and why. Newest context first where it matters.
 
+## Stage 4 (2026-11-22): frame-tx-sdk, a Kohaku prototype, final drafts, the grant proposal
+
+### frame-tx-sdk: the open questions, resolved with the brief's defaults
+All seven are recorded with reasons in `docs/sdk-design.md` under "Decisions for 0.1". In short:
+- **Its own repository, MIT, named `frame-tx-sdk`.** It's local at `~/Desktop/frame-tx-sdk` with git, with no GitHub repository and nothing published. `npm view frame-tx-sdk` returned 404 on 2026-11-22. `viem-frame-tx` is taken (an encoder and sigHash only, 2026-09), and the README credits it.
+- **Profiles stay in the SDK.** Nobody was contacted about moving them to hegota-support.
+- **No Nethermind path in 0.1.** Nodes without `ethrex_simulateFrameTransaction` get an "unverified preflight", labelled in every result, which the broadcast guard refuses without `force: true`.
+- **MATCHA and reputation are raw readouts,** `null` where the endpoint doesn't exist. There's no scheduler.
+- **The broadcast guard is on by default.**
+
+### frame-tx-sdk: choices made in building it
+- **`FrameTransaction` carries its profile at runtime** (`tx.profile`), and every encoder checks it. That's in addition to the type parameter, because Relayless and the examples build transactions in more places than one client.
+- **`admitted` also requires every VERIFY and SENDER frame to succeed.** A failing DEFAULT frame is a warning. This matches what Relayless's preflight already enforced.
+- **The `devnet-8421` codec stays `@forshtat/hegota-support`'s,** imported statically and checked byte for byte.
+- **The pool-as-sender example is a 69-line Yul "DripPool",** not Relayless. It pays a fixed amount once per address, with the nonce key `keccak256(recipient)` as its nullifier and validation reading no storage. An example that withdrew from Relayless would pull GPL code and circuits into an MIT repository.
+- **The examples give the drip's SENDER frame 200,000 gas on both profiles.** ethrex `9aa3645d` (`devnet-8421`) fails that frame at 60,000 and 100,000 with all gas used, but succeeds at 200,000 using 12,196. Measured, cause not pinned down. Unused gas isn't charged.
+- **`randomNonceKey` avoids Node's `Buffer`,** so the SDK bundles for the browser (Relayless's web app builds with it).
+
+### Relayless on frame-tx-sdk
+- **Linked with `file:../../../frame-tx-sdk`** from `packages/sdk`, as the brief allows. **CI on GitHub can't resolve that path** until the SDK is published, so the PR's `unit` job is expected to fail at install. Local runs pass. Not worked around, because vendoring the SDK into this public repository would publish it before review.
+- **What moved:** the `hegota-8141` codec (deleted from Relayless), frame builders, recent-root reads and storage checks, the nonce-manager slot, admission simulation, sending, the spent-key check, the fee-bump arithmetic, and the sidecar estimate and reputation reads. **What stayed:** notes, proofs, compression, the pool's calls and limits, solvency, the in-flight ledger, and Relayless's fee policy.
+- **Relayless's fee bump now asks for 25% through `bumpFees`, rounded up.** It used 125/100 rounded down. The difference is a wei at most.
+
+### Kohaku prototype
+- **A separate plugin package (`@kohaku-eth/relayless`), not a mode of Privacy Pools.** Privacy Pools is 0xbow's protocol on ERC-20s, and Relayless is a different pool on native ETH. Whether it should become a Privacy Pools mode is an open question for Kohaku's maintainers (`docs/kohaku-design.md`).
+- **Purpose `m/29292'`** ("rl"), by the same rule as Privacy Pools' `28784'` and Tornado's `29795'`.
+- **Reads and simulation go through `host.provider`; sending goes through `host.network.fetch`,** like Privacy Pools' bundler traffic.
+- **The prototype links Relayless's client as TypeScript source** and relaxes `noUncheckedIndexedAccess` for that one package. An upstreamed version would use a built package.
+
+### Drafts
+- **Every draft is in my voice,** first person, with nothing posted.
+- **The Nethermind reply** drops the 235,000 sentence, as asked, and says the association set isn't in the 916,820 figure, because that chain 8141 pool has none.
+- **The ethresear.ch post** has 11 links; the notes say to cut them if the account is link-limited.
+- **Diagrams** are Mermaid sources plus hand-written SVGs (`docs/drafts/img/`), because Discourse may not render Mermaid.
+
+### Grant proposal
+- **Workstream 2 (the sidecar) is optional, pending its author's confirmation,** with its own budget rows. It cites only public facts about the sidecar: its last commit and the profile it speaks.
+- **The skeleton is kept,** marked superseded by `proposal.md`.
+
+### Live sources that differed from the brief
+- **Kohaku has no `broadcastPrivateOperation` in its code.** Only the plugins README still shows it. Broadcasting is a separate `Broadcaster<Op, Result>` with `broadcast(op)` (`packages/plugins/src/broadcaster/base.ts`, at `b6a67fa`), which the prototype implements.
+- **Kohaku has no CONTRIBUTING guide** at `b6a67fa`. Conventions were taken from the code: vitest projects, ESLint rules, strict TypeScript, changesets.
+- **ethrex `64b8fc09` gives keyed concurrency to one sender only when its validation reads none of its own storage** (and not the legacy nonce). EOAs get one pending frame transaction whatever their keys. The keyed-nonce example sends one at a time; the pool example shows concurrency.
+- **ethrex `64b8fc09` refuses `nonce_seq = 2^64 − 1`,** so `hegota-8141` has no single-use form, as the profile table already said. The integration suite checks the refusal on the live client.
+- **The devnet had to restart from a new genesis again:** its head was at slot 2,912 with the wall clock past slot 65,000, as in Stage 3. The old data was moved aside to `data.old.<time>`, not deleted.
+
 ## Stage 3 (2026-11-17): compression, upstream drafts, shared-sender research
 
 ### The withdrawal statement is compressed; the ragequit's isn't

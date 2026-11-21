@@ -156,6 +156,9 @@ importers:
       '@noble/hashes':
         specifier: ^1.5.0
         version: 1.8.0
+      frame-tx-sdk:
+        specifier: file:../../../frame-tx-sdk
+        version: file:../frame-tx-sdk(solc@0.8.28)(viem@2.57.16(typescript@5.9.3))
       poseidon-lite:
         specifier: 0.3.0
         version: 0.3.0
@@ -1055,6 +1058,12 @@ packages:
 
   fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
+
+  frame-tx-sdk@file:../frame-tx-sdk:
+    resolution: {directory: ../frame-tx-sdk, type: directory}
+    engines: {node: '>=20.12'}
+    peerDependencies:
+      viem: ^2.30.0
 
   fsevents@2.3.2:
     resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
@@ -2263,6 +2272,13 @@ snapshots:
   forge-std@https://github.com/foundry-rs/forge-std/archive/refs/tags/v1.9.4.tar.gz: {}
 
   fraction.js@5.3.4: {}
+
+  frame-tx-sdk@file:../frame-tx-sdk(solc@0.8.28)(viem@2.57.16(typescript@5.9.3)):
+    dependencies:
+      '@forshtat/hegota-support': 0.0.1(solc@0.8.28)(viem@2.57.16(typescript@5.9.3))
+      viem: 2.57.16(typescript@5.9.3)
+    transitivePeerDependencies:
+      - solc
 
   fsevents@2.3.2:
     optional: true
