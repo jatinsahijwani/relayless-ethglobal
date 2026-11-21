@@ -49,6 +49,30 @@ Nothing was posted, published or pushed outside our own repository. Decisions an
 - **Keyed concurrency on ethrex `64b8fc09` is for contract senders only:** an EOA's second keyed transaction is refused while one is pending. The keyed-nonce example sends one at a time; the pool example shows concurrency.
 - **ethrex `9aa3645d` needs about 200,000 gas for the drip's SENDER frame,** though it uses 12,196. Not investigated further.
 
+### Part 2: a Kohaku frame-transaction withdrawal prototype
+**Studied:** `ethereum/kohaku` master `b6a67fa` (2026-11-21), cloned to **`~/Desktop/kohaku-fork`**. I read `packages/plugins` (the plugin interface, `Broadcaster`, `Host`, `scopeKeystore`), `packages/privacy-pools` (its relayer and paymaster unshields, keys, tests) and `docs/pages/host.mdx`. **The design:** [`docs/kohaku-design.md`](docs/kohaku-design.md), covering:
+- how the unshield fits `prepareUnshield` and `Broadcaster`;
+- what changes against the paymaster path;
+- keys under `m/29292'/1'`;
+- admission and broadcasting through `host.provider` and `host.network`;
+- what upstreaming needs, and seven questions for the Kohaku team.
+
+**The prototype:** branch `relayless-frame-unshield` in the fork, 5 commits, **not pushed**. It's a new package, `@kohaku-eth/relayless`:
+- `createRelaylessPlugin`, with `prepareShield`, `prepareUnshield`, `balance` and `notes`;
+- `RelaylessBroadcaster implements Broadcaster`;
+- frame-tx-sdk for building, simulation and sending; Relayless's client for notes and proofs.
+
+| Test | Result |
+|---|---|
+| Unit (`pnpm test`) | **9/9**: keys stay in their subtree, are stable and never send; the broadcaster sends once through `host.network`, refuses unadmitted, unverified and in-flight operations without touching the network, and re-simulates stale ones through `host.provider` |
+| **A real withdrawal through the plugin interface** (`pnpm test:e2e:local-hegota`), local `hegota-8141` (ethrex `64b8fc09`) | **1/1, twice.** Shield 0.05 ETH, then unshield 0.02 ETH to a fresh address holding 0 ETH. Run 1: 973,582 gas, recipient 0 → 0.019998908637360515 ETH, proving 1,776 ms. Run 2: 993,581 gas, 0.019998888650220606 ETH, 1,816 ms. The node admitted it (268,100 validation declared), the change note (0.03 ETH) was recovered from the seed, and replaying the operation was refused before broadcast |
+| Kohaku's ESLint config | Clean |
+| Kohaku's own `plugins` tests, untouched | 36/36 |
+
+**Live sources that differed from the brief:** Kohaku's code has no `broadcastPrivateOperation` (only its README does); broadcasting is a separate `Broadcaster`. There's no CONTRIBUTING guide. Both are in `DECISIONS.md`.
+
+**Things I noticed:** Kohaku's viem provider throws for a receipt that doesn't exist yet, where its interface says `null`; the prototype handles both. The prototype links Relayless's client as TypeScript source, so it relaxes `noUncheckedIndexedAccess` for that package only.
+
 ## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
 
 ### Part G: upstream contributions opened (2026-11-18)
