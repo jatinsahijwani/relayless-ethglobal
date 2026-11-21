@@ -47,6 +47,5 @@ export function freshAccount(master: bigint, index: number) {
   return privateKeyToAccount(key);
 }
 
-/** Where NONCE_MANAGER keeps the sequence of (sender, key): non-zero means this nullifier is spent. */
-export const nonceSlot = (sender: Address, key: bigint): Hex =>
-  keccak256(concat([numberToHex(BigInt(sender), { size: 32 }), numberToHex(key, { size: 32 })]));
+/** Where NONCE_MANAGER keeps the sequence of (sender, key): non-zero means this nullifier is spent. From frame-tx-sdk. */
+export { nonceSlot } from "frame-tx-sdk";

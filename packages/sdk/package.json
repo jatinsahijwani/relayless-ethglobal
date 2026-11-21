@@ -15,6 +15,7 @@
   "dependencies": {
     "@forshtat/hegota-support": "0.0.1",
     "@noble/hashes": "^1.5.0",
+    "frame-tx-sdk": "file:../../../frame-tx-sdk",
     "poseidon-lite": "0.3.0",
     "snarkjs": "0.7.6",
     "viem": "^2.57.7"

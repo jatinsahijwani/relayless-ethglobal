@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { decodeFunctionData, getAddress, keccak256, type Address, type Hex } from "viem";
 import * as lib from "@forshtat/hegota-support/tx";
 import type { FrameTx } from "@forshtat/hegota-support/tx";
-import { encodeEnvelope, sigHash as hegotaSigHash } from "../src/codec-hegota.js";
+import { encodeEnvelope as sdkEncodeEnvelope, type FrameTransaction } from "frame-tx-sdk";
 import { PROFILES, profileOf } from "../src/profiles.js";
 import { EMPTY_PROOF, EMPTY_WITHDRAW_PROOF, LIMITS, buildRagequit, buildWithdrawal, encodeRootTuples, rawOf, refsOf, sigHashOf, txHashOf, verifyIndex } from "../src/frame.js";
 import { POOL_ABI } from "../src/chain.js";
@@ -11,6 +11,9 @@ import { DEVNET_TRACER } from "../src/profiles.js";
 
 const devnet = PROFILES["devnet-8421"];
 const hegota = PROFILES["hegota-8141"];
+// The hegota-8141 codec now lives in frame-tx-sdk; these pin it from Relayless's side too.
+const encodeEnvelope = (tx: FrameTx) => sdkEncodeEnvelope({ ...tx, profile: "hegota-8141" } as FrameTransaction);
+const hegotaSigHash = (tx: FrameTx) => hegota.codec.sigHash(tx);
 const pad = (n: number): Address => `0x${n.toString(16).padStart(40, "0")}`;
 
 // ethrex 64b8fc09, test/tests/common/frame_tx_wire_tests.rs: golden() and its two pinned strings.
