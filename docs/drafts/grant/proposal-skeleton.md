@@ -1,5 +1,7 @@
 # Proposal skeleton: Privacy-ready frame transactions for Hegotá
 
+**Superseded on 2026-11-22 by [`proposal.md`](proposal.md).** Kept for its history.
+
 **Draft for the author.** Structure and milestones only; the budget is left blank on purpose. Every "today" figure is measured and linked in [`evidence.md`](evidence.md).
 
 ## Summary (one paragraph, to write last)

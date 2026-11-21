@@ -2,7 +2,7 @@
 
 A running log of every public result, with links, for grant applications. **Add a row whenever something becomes public.** Rows marked *prepared* or *local* aren't public yet: they're listed so nothing is forgotten, and must not be cited as public until they are.
 
-Last updated: 2026-11-18.
+Last updated: 2026-11-22.
 
 ## Recognition
 | Date | What | Link |
@@ -20,8 +20,17 @@ Last updated: 2026-11-18.
 |---|---|---|
 | 2026-11-07 | Hackathon build: circuits, pool, validator generator, SDK, web app | PRs [#1](https://github.com/jatinsahijwani/relayless-ethglobal/pull/1)–[#4](https://github.com/jatinsahijwani/relayless-ethglobal/pull/4) |
 | 2026-11-17 | Stage 2 merged: refocused core, provider-agnostic association sets, spec profiles `devnet-8421` and `hegota-8141`, chain 8141 deployment | [PR #5](https://github.com/jatinsahijwani/relayless-ethglobal/pull/5) |
-| 2026-11-17 | Statement compression (eprint 2025/1500), on-chain alias checks, new chain 8141 pool. *Open* | [PR #7](https://github.com/jatinsahijwani/relayless-ethglobal/pull/7) |
-| 2026-11-17 | Docs fixes after the merge. *Open* | [PR #6](https://github.com/jatinsahijwani/relayless-ethglobal/pull/6) |
+| 2026-11-17 | Statement compression (eprint 2025/1500), on-chain alias checks, new chain 8141 pool | [PR #7](https://github.com/jatinsahijwani/relayless-ethglobal/pull/7) (merged) |
+| 2026-11-17 | Docs fixes after the merge | [PR #6](https://github.com/jatinsahijwani/relayless-ethglobal/pull/6) (merged) |
+| 2026-11-18 | Shared-sender harness and results; upstream links | [PR #8](https://github.com/jatinsahijwani/relayless-ethglobal/pull/8), [PR #9](https://github.com/jatinsahijwani/relayless-ethglobal/pull/9) (merged) |
+
+## Stage 4 (2026-11-22): SDK, Kohaku prototype, final drafts
+| Date | What | Status | Where |
+|---|---|---|---|
+| 2026-11-22 | **frame-tx-sdk 0.1** (MIT): profiles `devnet-8421` and `hegota-8141` (`eips-current` listed, refused), keyed nonces with the single-use form only where a profile has it, recent-root frames in both forms, admission across `ethrex_simulateFrameTransaction`, the sidecar's estimate and a labelled "unverified preflight", a guard that refuses to broadcast without a verified admission, fee bumps that re-prove through a callback, reputation and MATCHA readouts only where the endpoint exists. 46 unit tests; integration 8/8 on a local `hegota-8141` chain and 5/5 on the `devnet-8421` stack (chain plus sidecar). npm name `frame-tx-sdk` free on 2026-11-22 | *local, to be published* | `~/Desktop/frame-tx-sdk` |
+| 2026-11-22 | **Relayless runs on frame-tx-sdk.** Bytes unchanged (golden vector and byte-equality tests). `devnet-8421`: e2e 34/34, e2e-asp 10/10, hostile recipients 10/10, alias 6/6. `hegota-8141`: e2e 32/32 (31/32 on a first run, on the timing-sensitive concurrency check), e2e-asp 10/10, hostile recipients 10/10, alias 6/6 | *PR open in our repo* | Branch `sdk` |
+| 2026-11-22 | **Kohaku frame-transaction unshield prototype:** a Relayless plugin through Kohaku's plugin interface and a `Broadcaster`, keys under `m/29292'/1'`, sends through `host.network`. A real withdrawal to a fresh 0-ETH address on a local `hegota-8141` chain: 973,582 and 993,581 gas in two runs, about 1.8 s proving. 9 unit tests and 1 e2e; ESLint clean with Kohaku's config | *local branch, not pushed* | `~/Desktop/kohaku-fork`, branch `relayless-frame-unshield`; design in `docs/kohaku-design.md` |
+| 2026-11-22 | Final forum drafts: reply to Nethermind's thread, reply to MATCHA, EIP-8250 and EIP-8272 support posts, the ethresear.ch post with two diagrams; full ESP proposal | *drafted, not posted* | `docs/drafts/` |
 
 ## Findings
 | Date | Finding | Status | Where |
@@ -43,4 +52,5 @@ Last updated: 2026-11-18.
 |---|---|---|
 | 2026-11 | Shared-sender reputation griefing under ERC-8421, measured | Public in the repo: [`docs/reputation-analysis.md`](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/docs/reputation-analysis.md) |
 | 2026-11-17 | Shared senders against an ERC-8421 sidecar (with and without the fix), ethrex `64b8fc09` and ethrex `247e2dd2` (MATCHA): conflicts, replacement spam, width draining, mass invalidation, honest throughput | Public: [RESULTS.md](https://github.com/jatinsahijwani/relayless-ethglobal/blob/main/research/shared-sender/RESULTS.md) |
-| | ethresear.ch post on shared senders, reputation and MATCHA | *drafted, not posted* (`docs/drafts/ethresearch-post-outline.md`) |
+| 2026-11-22 | ethresear.ch post on shared senders, reputation and MATCHA | *drafted, not posted* (`docs/drafts/ethresearch-post.md`) |
+| 2026-11-22 | ethrex `64b8fc09` grants keyed concurrency for one sender only when its validation reads none of its own storage and not the legacy nonce; an EOA gets one pending frame transaction. Found while building the SDK's examples | Recorded in `docs/sdk-design.md` |
