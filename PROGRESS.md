@@ -1,5 +1,54 @@
 # Progress
 
+## Stage 4: frame-tx-sdk, a Kohaku prototype, final drafts, the grant proposal (2026-11-22)
+Nothing was posted, published or pushed outside our own repository. Decisions and live-source differences are in `DECISIONS.md` under Stage 4.
+
+### Part 1: frame-tx-sdk 0.1, and Relayless on it
+**The SDK:** `frame-tx-sdk`, MIT, its own git repository at **`~/Desktop/frame-tx-sdk`**. There's no GitHub repository and nothing is on npm; the name was free on 2026-11-22. Design decisions are in [`docs/sdk-design.md`](docs/sdk-design.md).
+
+| Covers | How |
+|---|---|
+| Frames, APPROVE scopes, sigHash | `verifyFrame`, `senderFrame`, `defaultFrame`, `buildFrameTransaction` (pure), `signFrameTransaction`, `arbitrary`, per-profile codecs |
+| Profiles | `devnet-8421` and `hegota-8141` in one table, `eips-current` listed and refused |
+| Keyed nonces (EIP-8250) | `{ keys, seq }`, `{ legacy }`, `{ keys, singleUse: true }` only where the profile has it. The live client refuses `nonce_seq = 2^64 − 1` on `hegota-8141` |
+| Recent roots (EIP-8272) | A VERIFY frame on `hegota-8141`, the envelope field on `devnet-8421`, and `checkRecentRoot` against storage |
+| Admission | `ethrex_simulateFrameTransaction`, the sidecar's `eth_estimateFrameTransactionGas`, and a fallback labelled "unverified preflight" |
+| The broadcast guard | `sendFrameTransaction` refuses a failed, unverified or mismatched admission unless `force: true` |
+| Fee bumps | `bumpFrameTransaction` re-commits through a callback and checks the nonce is unchanged |
+| Readouts | Sidecar reputation and MATCHA width, `null` where the endpoint doesn't exist |
+| API and docs | `frameActions(profile)` for viem; TSDoc on exports; README with a quickstart; four examples (quickstart, plain, keyed nonce, a pool as sender) |
+
+**SDK tests, 2026-11-22:**
+
+| Suite | Result |
+|---|---|
+| Unit (`npm test`) | **46/46**: ethrex `64b8fc09`'s golden vector, byte equality with hegota-support's devnet builder, profile rules, admission routes, the guard, bumps, readouts, the viem extension |
+| Integration, local `hegota-8141` (ethrex `64b8fc09`) | **8/8**: plain EOA transaction, keyed nonce (consumed, resend refused), single-use refused by the client, a recent-root frame with a root written in the test, a pool as sender (three drips to 0-ETH addresses pending at once, one block), a fee bump, the unverified preflight refused then forced, readouts `null` |
+| Integration, local `devnet-8421` (ethrex `9aa3645d` plus the sidecar) | **5/5**: keyed transaction through the sidecar, the sidecar's estimate route with a re-signed placeholder copy, **a real fee-bump replacement through the sidecar with exactly one version landing**, a pool as sender with the pool's reputation read back, no MATCHA readout |
+| Quickstart from a clean clone | **Worked:** clone, `npm install`, 46/46, the offline example, a read-only simulation against chain 8141's public RPC (refused, nothing sent), then `example:plain` and `example:pool` against the local chain. 9 s to the read-only step, with a warm npm cache |
+
+**Relayless on the SDK** (branch `sdk`): `packages/sdk` depends on `file:../../../frame-tx-sdk`. Profiles come from the SDK's table, `codec-hegota.ts` is deleted, the builders use the SDK's, and preflight, sending, the spent check, fee bumps and the mempool comparison go through it. The bytes sent are unchanged: the golden-vector and byte-equality tests still pass.
+
+| Suite | `devnet-8421` | `hegota-8141` | Before |
+|---|---|---|---|
+| Circuits | 16/16 (shared) | | 16/16 |
+| Contracts | 29/29 (shared) | | 29/29 |
+| SDK unit | 43/43 (shared) | | 43/43 |
+| ASP | 15/15 (shared) | | 15/15 |
+| `scripts/e2e.ts` | **34/34** | **32/32** (a first run was 31/32: the concurrency check saw the three withdrawals mined in three consecutive one-second blocks; the rerun passed) | 34/34, 32/32 |
+| `scripts/e2e-asp.ts` | **10/10** | **10/10** | 10/10, 10/10 |
+| `scripts/adversarial.ts` | **10/10** | **10/10** | 10/10, 10/10 |
+| `scripts/alias.ts` | **6/6** | **6/6** | 6/6, 6/6 |
+| `pnpm typecheck`, `pnpm build` | clean | | clean |
+
+**PR:** PR_LINK. **CI will fail at install on GitHub,** because it can't see `../frame-tx-sdk`. That's expected until the SDK is published; see `DECISIONS.md`.
+
+**Things I noticed:**
+- **The devnet had stalled again** (head at slot 2,912, wall clock past 65,000), as in Stage 3. I restarted it from a new genesis with the script's own recipe; the old data was moved to `data.old.<time>`, not deleted.
+- **Starting Docker brought back `my-app-indexer` again,** which I stopped (not removed).
+- **Keyed concurrency on ethrex `64b8fc09` is for contract senders only:** an EOA's second keyed transaction is refused while one is pending. The keyed-nonce example sends one at a time; the pool example shows concurrency.
+- **ethrex `9aa3645d` needs about 200,000 gas for the drip's SENDER frame,** though it uses 12,196. Not investigated further.
+
 ## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
 
 ### Part G: upstream contributions opened (2026-11-18)
