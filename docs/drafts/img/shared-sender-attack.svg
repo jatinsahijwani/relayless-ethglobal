@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="372" viewBox="0 0 1040 372" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1040" height="372" fill="#ffffff"/>
+  <text x="20" y="28" font-size="16" font-weight="bold" fill="#1a1a1a">Replacement draining: 4 note holders, 5 fee bumps each, one burst, against one shared sender</text>
+  <g font-size="13" fill="#1a1a1a">
+    <rect x="20" y="50" width="220" height="250" rx="6" fill="#fbeaea" stroke="#b55a5a"/>
+    <text x="34" y="74" font-weight="bold">Note holders A, B, C, D</text>
+    <text x="34" y="98">each bumps a pending</text>
+    <text x="34" y="116">withdrawal 5 times</text>
+    <text x="34" y="146">20 versions sent</text>
+    <text x="34" y="164">4 land (paid for)</text>
+    <text x="34" y="182">16 replaced: never land,</text>
+    <text x="34" y="200">cost their senders nothing</text>
+    <rect x="300" y="50" width="200" height="250" rx="6" fill="#f2f2f2" stroke="#8a8a8a"/>
+    <text x="314" y="74" font-weight="bold">Mempool</text>
+    <text x="314" y="98">all 20 accepted on</text>
+    <text x="314" y="116">every target</text>
+    <text x="314" y="146">a baseline was</text>
+    <text x="314" y="164">already pending</text>
+    <rect x="560" y="50" width="460" height="250" rx="6" fill="#e8f0fb" stroke="#4a78b5"/>
+    <text x="574" y="74" font-weight="bold">What the pool's shared standing pays</text>
+    <text x="574" y="104" font-weight="bold">ERC-8421 sidecar, no replacement fix</text>
+    <text x="574" y="122">seen +22, included +6</text>
+    <text x="574" y="152" font-weight="bold">ERC-8421 sidecar, with the fix (PR #9)</text>
+    <text x="574" y="170">seen +6: one per distinct withdrawal</text>
+    <text x="574" y="200" font-weight="bold">MATCHA (ethrex 247e2dd2)</text>
+    <text x="574" y="218">width 20,507,996 → 11,298,098</text>
+    <text x="574" y="236">9,209,898 spent (21 charges), never returned</text>
+    <text x="574" y="266" font-weight="bold">ethrex 64b8fc09 (chain 8141's client)</text>
+    <text x="574" y="284">nothing tracked</text>
+  </g>
+  <g stroke="#555555" stroke-width="2" fill="#555555">
+    <line x1="240" y1="175" x2="295" y2="175"/><polygon points="295,170 300,175 295,180"/>
+    <line x1="500" y1="175" x2="555" y2="175"/><polygon points="555,170 560,175 555,180"/>
+  </g>
+  <text x="20" y="328" font-size="12" fill="#555555">Local chains, 2026-11-17. Charges = width spent ÷ the measured charge per additional withdrawal (438,504–438,594).</text>
+  <text x="20" y="346" font-size="12" fill="#555555">On MATCHA, honest withdrawals beyond the baseline then wait until width is earned back at finality.</text>
+</svg>

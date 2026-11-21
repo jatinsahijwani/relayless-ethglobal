@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="300" viewBox="0 0 1040 300" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1040" height="300" fill="#ffffff"/>
+  <text x="20" y="28" font-size="16" font-weight="bold" fill="#1a1a1a">A Relayless withdrawal on hegota-8141 (chain 8141): 916,820 gas</text>
+  <rect x="20" y="44" width="1000" height="44" rx="6" fill="#f2f2f2" stroke="#8a8a8a"/>
+  <text x="34" y="64" font-size="13" fill="#1a1a1a">Envelope: sender = pool · nonce_keys = [nullifier hash], seq 0 · one ARBITRARY signature = proof ‖ beta (288 bytes), bound to sigHash</text>
+  <text x="34" y="80" font-size="12" fill="#555555">Outside the frames: 22,272 gas (intrinsic)</text>
+  <g font-size="13" fill="#1a1a1a">
+    <rect x="20" y="108" width="235" height="170" rx="6" fill="#e8f0fb" stroke="#4a78b5"/>
+    <text x="32" y="130" font-weight="bold">Frame 0 · VERIFY</text>
+    <text x="32" y="150">→ recent-root contract</text>
+    <text x="32" y="170">EIP-8272 tuples: the pool's</text>
+    <text x="32" y="188">root (and an ASP root)</text>
+    <text x="32" y="262" font-weight="bold">5,579 gas</text>
+    <rect x="275" y="108" width="235" height="170" rx="6" fill="#e8f0fb" stroke="#4a78b5"/>
+    <text x="287" y="130" font-weight="bold">Frame 1 · VERIFY</text>
+    <text x="287" y="150">→ the pool itself</text>
+    <text x="287" y="170">checks the Groth16 proof,</text>
+    <text x="287" y="188">pins every frame,</text>
+    <text x="287" y="206">APPROVE(execution + payment)</text>
+    <text x="287" y="224">consumes the nonce key</text>
+    <text x="287" y="262" font-weight="bold">207,913 + 97,920 state</text>
+    <rect x="530" y="108" width="235" height="170" rx="6" fill="#eaf5ea" stroke="#4f9a4f"/>
+    <text x="542" y="130" font-weight="bold">Frame 2 · SENDER</text>
+    <text x="542" y="150">→ pool.withdraw(…)</text>
+    <text x="542" y="170">pays the recipient,</text>
+    <text x="542" y="188">inserts the change note,</text>
+    <text x="542" y="206">publishes Poseidon(root,</text>
+    <text x="542" y="224">leafCount) as a recent root</text>
+    <text x="542" y="262" font-weight="bold">193,729 + 379,440 state</text>
+    <rect x="785" y="108" width="235" height="170" rx="6" fill="#f6f0e6" stroke="#a5824a"/>
+    <text x="797" y="130" font-weight="bold">Frame 3 · DEFAULT</text>
+    <text x="797" y="150">→ pool.refund()</text>
+    <text x="797" y="170">returns the unused fee</text>
+    <text x="797" y="188">to the recipient</text>
+    <text x="797" y="262" font-weight="bold">9,967 gas</text>
+  </g>
+  <g stroke="#555555" stroke-width="2" fill="#555555">
+    <line x1="255" y1="193" x2="270" y2="193"/><polygon points="270,188 275,193 270,198"/>
+    <line x1="510" y1="193" x2="525" y2="193"/><polygon points="525,188 530,193 525,198"/>
+    <line x1="765" y1="193" x2="780" y2="193"/><polygon points="780,188 785,193 780,198"/>
+  </g>
+</svg>

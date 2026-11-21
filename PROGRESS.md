@@ -57,6 +57,8 @@ Nothing was posted, published or pushed outside our own repository. Decisions an
 - admission and broadcasting through `host.provider` and `host.network`;
 - what upstreaming needs, and seven questions for the Kohaku team.
 
+**PRs:** [#11](https://github.com/jatinsahijwani/relayless-ethglobal/pull/11) (this part), [#12](https://github.com/jatinsahijwani/relayless-ethglobal/pull/12) (Parts 3–4), stacked on #10.
+
 **The prototype:** branch `relayless-frame-unshield` in the fork, 5 commits, **not pushed**. It's a new package, `@kohaku-eth/relayless`:
 - `createRelaylessPlugin`, with `prepareShield`, `prepareUnshield`, `balance` and `notes`;
 - `RelaylessBroadcaster implements Broadcaster`;
@@ -72,6 +74,38 @@ Nothing was posted, published or pushed outside our own repository. Decisions an
 **Live sources that differed from the brief:** Kohaku's code has no `broadcastPrivateOperation` (only its README does); broadcasting is a separate `Broadcaster`. There's no CONTRIBUTING guide. Both are in `DECISIONS.md`.
 
 **Things I noticed:** Kohaku's viem provider throws for a receipt that doesn't exist yet, where its interface says `null`; the prototype handles both. The prototype links Relayless's client as TypeScript source, so it relaxes `noUncheckedIndexedAccess` for that package only.
+
+### Part 3: final posts, drafted, nothing posted
+All in `docs/drafts/`. Each opens with where to post it and its place in the order. The threads were re-read on 2026-11-22: Nethermind's latest post is 2026-11-10, MATCHA's 2026-10-07, EIP-8250's 2026-10-23, EIP-8272's 2026-07-17.
+
+| Order | Draft | Where |
+|---|---|---|
+| 1 (day 0) | [`reply-nethermind-thread.md`](docs/drafts/reply-nethermind-thread.md): full and two-link versions | ethresear.ch topic 26223 |
+| 2 (day 1) | [`reply-matcha-thread.md`](docs/drafts/reply-matcha-thread.md): full and two-link versions | ethresear.ch topic 25949 |
+| 3 (day 2) | EIP-8250 post in [`support-eip-8250-8272.md`](docs/drafts/support-eip-8250-8272.md), 179 words | Ethereum Magicians topic 28437 |
+| 4 (day 3) | EIP-8272 post, same file, 195 words. It answers the sidecar author's July question on the frame form | Ethereum Magicians topic 28621 |
+| 5 (day 5) | [`ethresearch-post.md`](docs/drafts/ethresearch-post.md), with [`img/frame-layout.svg`](docs/drafts/img/frame-layout.svg) and [`img/shared-sender-attack.svg`](docs/drafts/img/shared-sender-attack.svg) (Mermaid sources beside them) | New ethresear.ch topic, Networking |
+
+- **The Nethermind reply:** the 235,000 sentence is gone. Every figure is from the chain 8141 receipt (`hegota-8141`), apart from two marked exceptions: the association-set deltas (local `hegota-8141`) and the ERC-8421 admission figures (`devnet-8421`). The breakdown sums exactly to the 237,498 difference.
+- **The MATCHA reply** says plainly that chain 8141 (`64b8fc09`) doesn't run MATCHA and that the runs used `247e2dd2` locally. It answers four of the post's next steps, makes the two proposals, and ends with one question.
+- **Calculated figures are marked** in each draft's notes.
+
+### Part 4: the grant proposal
+[`docs/drafts/grant/proposal.md`](docs/drafts/grant/proposal.md), "Privacy-ready frame transactions for Hegotá", complete apart from the team, EF interest and budget amounts, which are placeholders. It covers:
+- the summary, problem and why now;
+- what exists, linked, with "to be published" and "local branch" where true;
+- six workstreams with milestones, the sidecar one optional pending its author's confirmation;
+- core (about 6 months) and extended (9–12 months) scopes, and a timeline;
+- the budget table and how to size it;
+- the open-source commitment, CROPS, risks, success measures and AI usage.
+
+[`evidence.md`](docs/drafts/grant/evidence.md) has a Stage 4 table. `proposal-skeleton.md` is kept, marked superseded.
+
+**What needs the author:**
+- Review and post the five drafts, in order.
+- Fill in the team, EF interest and budget.
+- Decide when to publish frame-tx-sdk; its links in the drafts and the proposal wait for that.
+- Decide whether to show the Kohaku design to its maintainers.
 
 ## Stage 3: upstream contributions, research data, grant prep (started 2026-11-17)
 

@@ -1,0 +1,8 @@
+%% A Relayless withdrawal on hegota-8141 (chain 8141, ethrex 64b8fc09). Gas from the chain 8141 receipt, 2026-11-17.
+flowchart LR
+  E["Envelope<br/>sender = pool<br/>nonce_keys = [nullifier hash], seq 0<br/>signature: ARBITRARY = proof ‖ beta (288 B)"]
+  F0["Frame 0 · VERIFY → 0x…8272<br/>EIP-8272 recent-root tuples<br/>5,579 gas"]
+  F1["Frame 1 · VERIFY → pool<br/>Groth16 proof bound to sigHash<br/>pins every frame, APPROVE(exec + pay)<br/>207,913 + 97,920 state (the key)"]
+  F2["Frame 2 · SENDER → pool.withdraw<br/>pay recipient, insert change note,<br/>publish Poseidon(root, leafCount)<br/>193,729 + 379,440 state"]
+  F3["Frame 3 · DEFAULT → pool.refund<br/>unused fee back to recipient<br/>9,967 gas"]
+  E --> F0 --> F1 --> F2 --> F3
