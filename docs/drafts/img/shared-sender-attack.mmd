@@ -1,0 +1,14 @@
+%% Replacement draining against one shared sender: a baseline, then 4 note holders bump 5 times each in one burst.
+%% Measured 2026-11-17 (research/shared-sender/RESULTS.md, step 3b).
+sequenceDiagram
+  participant H as 4 note holders
+  participant M as Mempool
+  participant P as Pool (one sender for everyone)
+  participant U as Honest user
+  H->>M: 20 fee-bumped versions of 4 withdrawals (one burst)
+  Note over M: 16 versions are replaced and never land
+  M-->>P: ERC-8421 sidecar without fix: seen +22, included +6
+  M-->>P: ERC-8421 sidecar with fix: seen +6
+  M-->>P: MATCHA (ethrex 247e2dd2): width 20,507,996 → 11,298,098 (21 charges, never returned)
+  U->>M: next withdrawal beyond the free baseline
+  Note over U,P: on MATCHA it waits until width is earned back at finality
