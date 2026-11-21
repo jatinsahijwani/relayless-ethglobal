@@ -1,6 +1,32 @@
 # Design: a viem extension for frame transactions
 
-**Status: design only, for the author's approval.** Nothing here is implemented yet. It describes extracting what Relayless's SDK already does for EIP-8141 frame transactions into a standalone package any team can use, whether they build a privacy pool, a paymaster or a smart account.
+**Status: built as `frame-tx-sdk` 0.1 (2026-11-22), in its own local repository at `~/Desktop/frame-tx-sdk`, not yet on GitHub or npm.** The decisions below resolve the open questions at the end; the rest of this page is the design as approved, with the differences listed. It describes extracting what Relayless's SDK already does for EIP-8141 frame transactions into a standalone package any team can use, whether they build a privacy pool, a paymaster or a smart account.
+
+## Decisions for 0.1 (2026-11-22)
+| Open question | Decision | Why |
+|---|---|---|
+| 1. Name and home | **`frame-tx-sdk`, its own repository, MIT.** Created locally at `~/Desktop/frame-tx-sdk` with git; no GitHub repository and nothing published. `npm view frame-tx-sdk` returned 404 on 2026-11-22, so the name is free | It matches the directory and says what it is. The working name `viem-frames` was also free. `viem-frame-tx` is taken, by an RLP encoder and sigHash for type-0x06 (September 2026), which the README credits |
+| 2. Who maintains profiles | **In the SDK for 0.1.** Offering them to `@forshtat/hegota-support` is a conversation for later; nobody was contacted | The `devnet-8421` codec is still hegota-support's, checked byte for byte |
+| 3. Nethermind's admission path | **Not in 0.1.** A node without `ethrex_simulateFrameTransaction` gets an "unverified preflight" (structure, budget, nonce, recent roots, balance), labelled so in every result, and `sendFrameTransaction` refuses it without `force: true` | Honest about what it can't see: nobody ran the VERIFY code |
+| 4. MATCHA | **Raw readout only:** `readMatchaWidth(sender)`, `null` where the node has no MATCHA. MATCHA fields in a simulation are surfaced only when the node returns them, and a MATCHA refusal makes `admitted` false. No scheduler | Width is node-local and stale after the next block |
+| 5. Reputation reads | **Only when the endpoint exists:** `readSidecarReputation`, `null` otherwise, documented as the reference sidecar's explorer API, advisory | It isn't a standard interface |
+| 6. Default refusal to send | **Yes.** `sendFrameTransaction` sends only with a verified, admitted result for the same transaction hash, else throws and sends nothing. `force: true` skips it | A shared sender pays for every refused-then-sent transaction |
+| 7. License | **MIT** | No circuit code; adoption |
+
+**What differs from the design below:**
+- **The `devnet-8421` codec is a static import**, not behind a subpath. hegota-support is small and has no dependencies beyond viem.
+- **`FrameTransaction<P>` carries its profile at runtime too** (`tx.profile`), and every encoder checks it. Relayless tags its transactions when it calls the SDK.
+- **The admission result** has `verified` (false only for the unverified preflight), `label`, `caveats` and `warnings` instead of `confidence: "authoritative" | "partial"`. The fallback source is `"unverified-preflight"`, not `"fallback"`. `admitted` also requires every VERIFY and SENDER frame to succeed; a failing DEFAULT frame is only a warning.
+- **`estimateTransaction` is `withEstimatePlaceholders(tx)`,** which returns the copy to re-commit, and `simulateFrameAdmission(tx, { via: "sidecar" })` judges it.
+- **Builders are `verifyFrame`, `senderFrame`, `defaultFrame` and `recentRootFrame`;** nonces are `{ keys, seq }`, `{ legacy }` or `{ keys, singleUse: true }`.
+- **`bumpFrameTransaction` checks the re-committed transaction** (same sender, nonce keys and sequence, fees at least the bump), and lists what a replacement costs on mempools that charge for it.
+
+**Found in the live client (ethrex `64b8fc09`) while building it:**
+- `ethrex_simulateFrameTransaction`'s own documentation says `valid` is necessary but not sufficient: the linear nonce, the fee floor, wire size and the per-sender pending rule aren't replayed. The SDK puts that in every result's `caveats`.
+- **Keyed concurrency for one sender needs a contract sender** whose validation reads none of its own storage and not the legacy nonce (`KeyedConcurrency` in `mempool.rs`). An EOA on default code gets one pending frame transaction, whatever its keys. Relayless's pool qualifies.
+- `nonce_seq = 2^64 − 1` is statically invalid, so `hegota-8141` has no single-use form, as the profile table says. Measured: the node refuses it.
+
+**Tests:** 46 unit, 8 integration on a local `hegota-8141` chain, and the `devnet-8421` integration suite (chain plus sidecar). Results are in `PROGRESS.md`.
 
 ## Why
 Every team building on frame transactions today writes the same plumbing: an RLP codec per spec revision, keyed nonces, recent-root frames, the fee and `maxCost` arithmetic, and "will the mempool take this?" before broadcasting. That plumbing changes with each EIP revision, and getting it wrong costs reputation on an ERC-8421 mempool and width on a MATCHA one. Relayless has working, tested versions of all of it for two revisions (`devnet-8421`, `hegota-8141`), used on chain 8141. Moving it into a library others can depend on is the cheapest way to make it reusable, and the clearest test of whether our abstractions are right.
