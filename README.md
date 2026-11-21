@@ -6,6 +6,7 @@
 
 - **What:** a privacy pool that pays gas from the note being withdrawn, so a brand-new wallet holding 0 ETH can receive money with nobody funding it, using EIP-8141 frame transactions and the alt mempool.
 - **Where it fits:** the pool primitive builds on prior work, where [soispoke's reference pool](https://github.com/soispoke/minimal-shielded-pool) leads. Relayless adds the ERC-8421 alt mempool path, measured shared-sender reputation, a provider-agnostic compliance layer, and the SDK. See [docs/landscape.md](docs/landscape.md).
+- **Frame-transaction plumbing** (codecs per spec profile, keyed nonces, recent-root frames, admission simulation, sending and fee bumps) comes from **frame-tx-sdk**, an MIT library extracted from this repository. It's local for now and will be published. See [docs/sdk-design.md](docs/sdk-design.md).
 - **Run it:** `scripts/local-stack.sh && pnpm web`, then open http://127.0.0.1:5199. See [Run it](#run-it).
 
 ![A payment to a wallet holding 0 ETH](docs/img/demo.gif)
@@ -144,6 +145,8 @@ const a = await rl.anonymity({ amount }); // { minEntropyBits, shannonBits, setS
 
 CLI: `npx tsx packages/cli/src/cli.ts deposit|withdraw|anonymity|recover|fresh|ragequit`
 
+The SDK builds, simulates and sends through [frame-tx-sdk](docs/sdk-design.md), linked from `../frame-tx-sdk` until it's published. There's no public repository for it yet, so a fresh clone of this one can't install until it is. It refuses to broadcast anything a node hasn't simulated and admitted.
+
 ## Association sets
 A pool can require that a note's label is in an approved set before it leaves privately. Whoever is left out can always exit publicly, to the address that deposited. That's the Privacy Pools model, carried into frame transactions.
 
@@ -251,7 +254,7 @@ All of this repository's code is in its git history, from the first commit, `aa7
 Third-party work is listed under [Prior work](#prior-work) and [NOTICE.md](NOTICE.md).
 
 ## AI usage
-Claude Code was used for implementation, testing and documentation, under the author's direction, and from Stage 3 also for the shared-sender research harness and its write-up, and for drafting the upstream PRs, forum replies and grant texts in `docs/drafts/`, which the author reviews and sends. The ideas, steps and detailed specifications came from the author, who also designed, reviewed and validated the work.
+The design, the research questions, the measurements, the decisions and the review are the author's. The implementation used Claude Code, under the author's direction: the code, tests and documentation; from Stage 3, the shared-sender research harness and its write-up, and drafts of the upstream PRs, forum replies and grant texts in `docs/drafts/`, which the author reviews and sends; from Stage 4, frame-tx-sdk, the Kohaku prototype, and the final drafts and grant proposal. The ideas, steps and detailed specifications came from the author, who also validated the work.
 
 ## Docs
 [Landscape](docs/landscape.md), [spec port](docs/spec-port.md), [testnet run](docs/testnet-run.md), [association sets](docs/association-sets.md), [code tour](docs/code-tour.md), [reputation analysis](docs/reputation-analysis.md), [gateway repro](docs/repro-gateway.md), [upstream fix](docs/upstream-pr.md), [gas report](docs/gas-report.md), [research notes](docs/research-notes.md), [demo script](docs/demo-script.md), [decisions](DECISIONS.md), [progress](PROGRESS.md).

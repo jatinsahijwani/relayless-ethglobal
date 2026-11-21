@@ -28,6 +28,7 @@ The withdrawal's public-input compression follows its use of the hybrid scheme f
 - **@zk-kit/lean-imt.sol** (MIT): the on-chain tree.
 - **poseidon-solidity**, **poseidon-lite** (MIT): Poseidon hashing.
 - **snarkjs** (GPL-3.0): the prover, used as a runtime dependency. Its own GPL-3.0 dependencies stay packages too: **ffjavascript**, **fastfile**, **r1csfile**, **wasmcurves**, **wasmbuilder**, **@iden3/binfileutils** and **@iden3/bigarray**.
+- **frame-tx-sdk** (MIT): frame-transaction codecs, builders, admission and sending. By the same author, extracted from this repository; linked locally until published.
 - **viem** (MIT).
 - **@noble/hashes** (MIT): key derivation.
 
